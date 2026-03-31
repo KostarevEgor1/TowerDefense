@@ -114,7 +114,9 @@ namespace TowerDefense.Tests
             var enemy = new Enemy(path, 40);
             for (int i = 0; i < 30; i++) enemy.Update();
             int hpBefore = enemy.Health;
-            tower.TryShoot(new List<Enemy> { enemy }, 40, out _);
+            tower.TryShoot(new List<Enemy> { enemy }, 40, out _, out var projectile);
+            Assert.That(projectile, Is.Not.Null);
+            for (int i = 0; i < 50; i++) projectile!.Update();
             Assert.That(enemy.Health, Is.LessThan(hpBefore));
         }
     }

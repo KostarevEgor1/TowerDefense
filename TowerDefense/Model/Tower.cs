@@ -27,13 +27,17 @@ namespace TowerDefense.Model
             return best;
         }
 
-        public bool TryShoot(List<Enemy> enemies, int cellSize, out Enemy? target)
+        public bool TryShoot(List<Enemy> enemies, int cellSize, out Enemy? target, out Projectile? projectile)
         {
             target = null;
+            projectile = null;
             if (cooldown > 0) { cooldown--; return false; }
             target = FindTarget(enemies, cellSize);
             if (target == null) return false;
-            target.TakeDamage(Damage);
+            
+            float cx = Col * cellSize + cellSize / 2f;
+            float cy = Row * cellSize + cellSize / 2f;
+            projectile = new Projectile(cx, cy, target, Damage);
             cooldown = FireRate;
             return true;
         }

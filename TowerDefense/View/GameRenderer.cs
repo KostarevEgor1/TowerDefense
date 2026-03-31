@@ -30,22 +30,34 @@ namespace TowerDefense.View
             {
                 int tx = tower.Col * field.CellSize;
                 int ty = tower.Row * field.CellSize;
-                g.FillRectangle(Brushes.SteelBlue, tx + 4, ty + 4, field.CellSize - 8, field.CellSize - 8);
-                g.FillEllipse(Brushes.LightBlue, tx + 12, ty + 12, field.CellSize - 24, field.CellSize - 24);
+                var sprite = SpriteManager.GetTowerSprite();
+                int offsetX = (field.CellSize - sprite.Width) / 2;
+                int offsetY = (field.CellSize - sprite.Height) / 2;
+                g.DrawImage(sprite, tx + offsetX, ty + offsetY);
+                
+                // Радиус атаки (полупрозрачный)
                 float cx = tower.Col * field.CellSize + field.CellSize / 2f;
                 float cy = tower.Row * field.CellSize + field.CellSize / 2f;
-                using var rangePen = new Pen(Color.FromArgb(40, 100, 180, 255), 1);
+                using var rangePen = new Pen(Color.FromArgb(30, 100, 180, 255), 1);
                 g.DrawEllipse(rangePen, cx - tower.Range, cy - tower.Range, tower.Range * 2, tower.Range * 2);
+            }
+            foreach (var projectile in model.Projectiles)
+            {
+                var sprite = SpriteManager.GetProjectileSprite();
+                g.DrawImage(sprite, projectile.X - sprite.Width / 2, projectile.Y - sprite.Height / 2);
             }
             foreach (var enemy in model.Enemies)
             {
-                float ex = enemy.X - 14; float ey = enemy.Y - 14;
-                g.FillEllipse(Brushes.DarkRed, ex, ey, 28, 28);
-                g.FillEllipse(Brushes.OrangeRed, ex + 3, ey + 3, 22, 22);
+                var sprite = SpriteManager.GetEnemySprite();
+                float ex = enemy.X - sprite.Width / 2;
+                float ey = enemy.Y - sprite.Height / 2;
+                g.DrawImage(sprite, ex, ey);
+                
+                // HP бар
                 float hpRatio = (float)enemy.Health / enemy.MaxHealth;
-                g.FillRectangle(Brushes.DarkGray, ex, ey - 6, 28, 4);
+                g.FillRectangle(Brushes.DarkGray, ex, ey - 6, sprite.Width, 4);
                 g.FillRectangle(hpRatio > 0.5f ? Brushes.LimeGreen : Brushes.Red,
-                    ex, ey - 6, 28 * hpRatio, 4);
+                    ex, ey - 6, sprite.Width * hpRatio, 4);
             }
             using var lf = new Font("Arial", 10, FontStyle.Bold);
             var sp = field.Path[0]; var ep = field.Path[field.Path.Count - 1];

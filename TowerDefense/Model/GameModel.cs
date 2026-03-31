@@ -8,6 +8,7 @@ namespace TowerDefense.Model
         public GameField Field { get; } = new GameField();
         public List<Enemy>  Enemies { get; } = new List<Enemy>();
         public List<Tower>  Towers  { get; } = new List<Tower>();
+        public List<Projectile> Projectiles { get; } = new List<Projectile>();
         public ResourceManager Resources { get; } = new ResourceManager();
         public int Score { get; private set; }
 
@@ -38,7 +39,20 @@ namespace TowerDefense.Model
             }
 
             foreach (var tower in Towers)
-                tower.TryShoot(Enemies, Field.CellSize, out _);
+            {
+                if (tower.TryShoot(Enemies, Field.CellSize, out _, out var projectile))
+                {
+                    if (projectile != null)
+                        Projectiles.Add(projectile);
+                }
+            }
+
+            for (int i = Projectiles.Count - 1; i >= 0; i--)
+            {
+                Projectiles[i].Update();
+                if (Projectiles[i].HasHit || Projectiles[i].Target.IsDead)
+                    Projectiles.RemoveAt(i);
+            }
 
             for (int i = Enemies.Count - 1; i >= 0; i--)
             {
