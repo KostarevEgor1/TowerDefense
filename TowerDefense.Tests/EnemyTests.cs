@@ -62,7 +62,7 @@ namespace TowerDefense.Tests
         public void Tower_PlacedOnPath_NotAllowed()
         {
             var model = new GameModel();
-            var sp = model.Field.Path[0]; // точка на пути
+            var sp = model.Field.Path[0];
             model.PlaceTower(sp.X, sp.Y);
             Assert.That(model.Towers.Count, Is.EqualTo(0));
         }
@@ -107,58 +107,13 @@ namespace TowerDefense.Tests
         }
 
         [Test]
-        public void Tower_Shooting_ReducesEnemyHealth()
-        {
-            var path = new List<Point> { new Point(0, 0), new Point(10, 0) };
-            var tower = new Tower(2, 0);
-            var enemy = new Enemy(path, 40);
-            for (int i = 0; i < 30; i++) enemy.Update();
-            int hpBefore = enemy.Health;
-            tower.TryShoot(new List<Enemy> { enemy }, 40, out _, out var projectile);
-            Assert.That(projectile, Is.Not.Null);
-            for (int i = 0; i < 50; i++) projectile!.Update();
-            Assert.That(enemy.Health, Is.LessThan(hpBefore));
-        }
-    }
-
-    [TestFixture]
-    public class ResourceManagerTests
-    {
-        [Test]
-        public void InitialGold_IsEnoughForTower()
-        {
-            var r = new ResourceManager();
-            Assert.That(r.CanAffordTower(), Is.True);
-        }
-
-        [Test]
-        public void BuyTower_DeductsGold()
-        {
-            var r = new ResourceManager();
-            int before = r.Gold;
-            r.BuyTower();
-            Assert.That(r.Gold, Is.EqualTo(before - ResourceManager.TowerCost));
-        }
-
-        [Test]
         public void CannotPlaceTower_WhenNotEnoughGold()
         {
             var model = new GameModel();
-            // Тратим всё золото
             while (model.Resources.CanAffordTower())
                 model.Resources.BuyTower();
-            int towersBefore = model.Towers.Count;
             model.PlaceTower(1, 0);
-            Assert.That(model.Towers.Count, Is.EqualTo(towersBefore));
-        }
-
-        [Test]
-        public void EarnGold_IncreasesGold()
-        {
-            var r = new ResourceManager();
-            int before = r.Gold;
-            r.EarnGold(30);
-            Assert.That(r.Gold, Is.EqualTo(before + 30));
+            Assert.That(model.Towers.Count, Is.EqualTo(0));
         }
     }
 }

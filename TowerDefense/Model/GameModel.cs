@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Drawing;
 
 namespace TowerDefense.Model
 {
@@ -9,13 +8,10 @@ namespace TowerDefense.Model
         public List<Enemy>  Enemies { get; } = new List<Enemy>();
         public List<Tower>  Towers  { get; } = new List<Tower>();
         public List<Projectile> Projectiles { get; } = new List<Projectile>();
+        public WaveManager  Waves   { get; } = new WaveManager();
         public ResourceManager Resources { get; } = new ResourceManager();
         public int Score { get; private set; }
-
-        private int spawnTimer;
-        private int spawnedCount;
-        private const int SpawnInterval = 90;
-        private const int TotalEnemies  = 10;
+        public bool IsGameOver => Resources.IsGameOver();
 
         public bool CanPlaceTower(int col, int row) =>
             !Field.IsOnPath(col, row) &&
@@ -29,14 +25,14 @@ namespace TowerDefense.Model
             Resources.BuyTower();
         }
 
+        public void StartWave() => Waves.StartNextWave();
+
         public void Update()
         {
-            spawnTimer++;
-            if (spawnTimer >= SpawnInterval && spawnedCount < TotalEnemies)
-            {
-                Enemies.Add(new Enemy(Field.Path, Field.CellSize));
-                spawnedCount++; spawnTimer = 0;
-            }
+            if (IsGameOver) return;
+
+            if (Waves.ShouldSpawn(out int hp))
+                Enemies.Add(new Enemy(Field.Path, Field.CellSize, hp));
 
             foreach (var tower in Towers)
             {
@@ -57,8 +53,23 @@ namespace TowerDefense.Model
             for (int i = Enemies.Count - 1; i >= 0; i--)
             {
                 Enemies[i].Update();
-                if (Enemies[i].IsDead)  { Score += 10; Resources.EarnGold(20); Enemies.RemoveAt(i); }
-                else if (Enemies[i].ReachedEnd) { Enemies.RemoveAt(i); }
+                if (Enemies[i].IsDead)
+                {
+                    Score += 10;
+                    Resources.EarnGold(20);
+                    Enemies.RemoveAt(i);
+                }
+                else if (Enemies[i].ReachedEnd)
+                {
+                    Resources.LoseBaseHp(1);
+                    Enemies.RemoveAt(i);
+                }
+            }
+
+            if (Waves.IsWaveComplete(Enemies))
+            {
+                Resources.EarnGold(50);
+                Waves.StartNextWave();
             }
         }
     }

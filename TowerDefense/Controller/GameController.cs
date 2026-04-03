@@ -5,9 +5,8 @@ namespace TowerDefense.Controller
     public class GameController
     {
         public GameModel Model { get; } = new GameModel();
-
         public void Tick() => Model.Update();
-
+        public void StartWave() => Model.StartWave();
         public void HandleClick(int pixelX, int pixelY)
         {
             int col = pixelX / Model.Field.CellSize;
