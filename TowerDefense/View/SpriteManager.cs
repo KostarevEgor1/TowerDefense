@@ -2,31 +2,42 @@ using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
+using System.Collections.Generic;
+using TowerDefense.Model;
 
 namespace TowerDefense.View
 {
     public static class SpriteManager
     {
-        private static Bitmap? towerSprite;
+        private static Dictionary<TowerType, Bitmap> towerSprites = new();
         private static Bitmap? enemySprite;
         private static Bitmap? projectileSprite;
 
-        public static Bitmap GetTowerSprite()
+        public static Bitmap GetTowerSprite(TowerType type = TowerType.Basic)
         {
-            if (towerSprite != null) return towerSprite;
+            if (towerSprites.ContainsKey(type)) return towerSprites[type];
             
-            string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "tower_basic.png");
+            string filename = type switch
+            {
+                TowerType.Basic => "tower_basic.png",
+                TowerType.Sniper => "tower_sniper.png",
+                TowerType.Rapid => "tower_rapid.png",
+                _ => "tower_basic.png"
+            };
+            
+            string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", filename);
             if (File.Exists(path))
             {
-                towerSprite = new Bitmap(path);
-                return towerSprite;
+                towerSprites[type] = new Bitmap(path);
+                return towerSprites[type];
             }
             
             // Fallback
-            towerSprite = new Bitmap(32, 32);
-            using var g = Graphics.FromImage(towerSprite);
+            var fallback = new Bitmap(32, 32);
+            using var g = Graphics.FromImage(fallback);
             g.Clear(Color.Gray);
-            return towerSprite;
+            towerSprites[type] = fallback;
+            return fallback;
         }
 
         public static Bitmap GetEnemySprite()

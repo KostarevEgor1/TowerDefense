@@ -7,21 +7,23 @@ namespace TowerDefense.Model
     {
         public float X { get; private set; }
         public float Y { get; private set; }
-        public float Speed { get; } = 1.5f;
+        public float Speed { get; }
         public bool ReachedEnd { get; private set; }
         public int MaxHealth { get; }
         public int Health { get; private set; }
         public bool IsDead => Health <= 0;
+        public EnemyType Type { get; }
 
         private readonly List<Point> path;
         private int segmentIndex;
         private float segmentProgress;
         private readonly int cellSize;
 
-        public Enemy(List<Point> path, int cellSize, int health = 3)
+        public Enemy(List<Point> path, int cellSize, int health = 3, EnemyType type = EnemyType.Normal)
         {
             this.path = path; this.cellSize = cellSize;
-            MaxHealth = health; Health = health;
+            Type = type; MaxHealth = health; Health = health;
+            Speed = type switch { EnemyType.Fast => 3f, EnemyType.Tank => 0.8f, _ => 1.5f };
             X = path[0].X * cellSize + cellSize / 2f;
             Y = path[0].Y * cellSize + cellSize / 2f;
         }

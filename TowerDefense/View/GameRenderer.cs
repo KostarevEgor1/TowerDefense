@@ -9,7 +9,7 @@ namespace TowerDefense.View
         private readonly GameModel model;
         public GameRenderer(GameModel model) => this.model = model;
 
-        public void Draw(Graphics g, Point mouseCell)
+        public void Draw(Graphics g, Point mouseCell, TowerType selectedType = TowerType.Basic)
         {
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             g.Clear(Color.FromArgb(34, 85, 34));
@@ -27,18 +27,30 @@ namespace TowerDefense.View
                     if (field.IsOnPath(c, r))
                         g.FillRectangle(pathBrush, c * field.CellSize, r * field.CellSize, field.CellSize, field.CellSize);
             
-            using var lf = new Font("Arial", 10, FontStyle.Bold);
-            var sp = field.Path[0]; var ep = field.Path[field.Path.Count - 1];
-            g.FillRectangle(Brushes.LimeGreen, sp.X * field.CellSize, sp.Y * field.CellSize, field.CellSize, field.CellSize);
-            g.DrawString("S", lf, Brushes.Black, sp.X * field.CellSize + 12, sp.Y * field.CellSize + 11);
-            g.FillRectangle(Brushes.Crimson, ep.X * field.CellSize, ep.Y * field.CellSize, field.CellSize, field.CellSize);
-            g.DrawString("E", lf, Brushes.White, ep.X * field.CellSize + 12, ep.Y * field.CellSize + 11);
+            // Зоны строительства
+            using var buildZoneBrush = new SolidBrush(Color.FromArgb(40, 100, 150, 100));
+            using var buildZonePen = new Pen(Color.FromArgb(120, 100, 200, 100), 2);
+            foreach (var zone in field.BuildZones)
+            {
+                g.FillRectangle(buildZoneBrush, zone.X * field.CellSize, zone.Y * field.CellSize, 
+                    field.CellSize, field.CellSize);
+                g.DrawRectangle(buildZonePen, zone.X * field.CellSize + 2, zone.Y * field.CellSize + 2, 
+                    field.CellSize - 4, field.CellSize - 4);
+            }
+            
+            using var labelFont = new Font("Arial", 10, FontStyle.Bold);
+            var startPoint = field.Path[0]; 
+            var endPoint = field.Path[field.Path.Count - 1];
+            g.FillRectangle(Brushes.LimeGreen, startPoint.X * field.CellSize, startPoint.Y * field.CellSize, field.CellSize, field.CellSize);
+            g.DrawString("S", labelFont, Brushes.Black, startPoint.X * field.CellSize + 12, startPoint.Y * field.CellSize + 11);
+            g.FillRectangle(Brushes.Crimson, endPoint.X * field.CellSize, endPoint.Y * field.CellSize, field.CellSize, field.CellSize);
+            g.DrawString("E", labelFont, Brushes.White, endPoint.X * field.CellSize + 12, endPoint.Y * field.CellSize + 11);
 
             foreach (var tower in model.Towers)
             {
                 int tx = tower.Col * field.CellSize;
                 int ty = tower.Row * field.CellSize;
-                var sprite = SpriteManager.GetTowerSprite();
+                var sprite = SpriteManager.GetTowerSprite(tower.Type);
                 int offsetX = (field.CellSize - sprite.Width) / 2;
                 int offsetY = (field.CellSize - sprite.Height) / 2;
                 g.DrawImage(sprite, tx + offsetX, ty + offsetY);
@@ -48,11 +60,13 @@ namespace TowerDefense.View
                 using var rangePen = new Pen(Color.FromArgb(30, 100, 180, 255), 1);
                 g.DrawEllipse(rangePen, cx - tower.Range, cy - tower.Range, tower.Range * 2, tower.Range * 2);
             }
+            
             foreach (var projectile in model.Projectiles)
             {
                 var sprite = SpriteManager.GetProjectileSprite();
                 g.DrawImage(sprite, projectile.X - sprite.Width / 2, projectile.Y - sprite.Height / 2);
             }
+            
             foreach (var enemy in model.Enemies)
             {
                 var sprite = SpriteManager.GetEnemySprite();
@@ -73,7 +87,14 @@ namespace TowerDefense.View
                 {
                     float cx = mouseCell.X * field.CellSize + field.CellSize / 2f;
                     float cy = mouseCell.Y * field.CellSize + field.CellSize / 2f;
-                    float range = 120f; // Радиус базовой башни
+                    
+                    // Получаем радиус для выбранного типа башни
+                    float range = selectedType switch
+                    {
+                        TowerType.Sniper => 220f,
+                        TowerType.Rapid => 80f,
+                        _ => 120f
+                    };
                     
                     // Полупрозрачный круг радиуса
                     using var previewBrush = new SolidBrush(Color.FromArgb(40, 100, 200, 100));

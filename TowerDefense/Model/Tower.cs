@@ -3,16 +3,29 @@ using System.Collections.Generic;
 
 namespace TowerDefense.Model
 {
+    public enum TowerType { Basic, Sniper, Rapid }
+
     public class Tower
     {
         public int Col { get; }
         public int Row { get; }
-        public float Range { get; } = 120f;
-        public int Damage { get; } = 1;
-        public int FireRate { get; } = 40;
+        public TowerType Type { get; }
+        public float Range { get; }
+        public int Damage { get; }
+        public int FireRate { get; }
+        public int Cost { get; }
         private int cooldown;
 
-        public Tower(int col, int row) { Col = col; Row = row; }
+        public Tower(int col, int row, TowerType type = TowerType.Basic)
+        {
+            Col = col; Row = row; Type = type;
+            switch (type)
+            {
+                case TowerType.Basic:  Range = 120; Damage = 1; FireRate = 40; Cost = 50;  break;
+                case TowerType.Sniper: Range = 220; Damage = 3; FireRate = 80; Cost = 100; break;
+                case TowerType.Rapid:  Range = 80;  Damage = 1; FireRate = 15; Cost = 75;  break;
+            }
+        }
 
         public Enemy? FindTarget(List<Enemy> enemies, int cellSize)
         {

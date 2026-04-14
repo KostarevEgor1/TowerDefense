@@ -13,16 +13,20 @@ namespace TowerDefense.Model
         public int Score { get; private set; }
         public bool IsGameOver => Resources.IsGameOver();
 
-        public bool CanPlaceTower(int col, int row) =>
-            !Field.IsOnPath(col, row) &&
-            !Towers.Exists(t => t.Col == col && t.Row == row) &&
-            Resources.CanAffordTower();
-
-        public void PlaceTower(int col, int row)
+        public bool CanPlaceTower(int col, int row, TowerType type = TowerType.Basic)
         {
-            if (!CanPlaceTower(col, row)) return;
-            Towers.Add(new Tower(col, row));
-            Resources.BuyTower();
+            int cost = new Tower(0, 0, type).Cost;
+            return Field.IsInBuildZone(col, row) &&
+                   !Towers.Exists(t => t.Col == col && t.Row == row) &&
+                   Resources.Gold >= cost;
+        }
+
+        public void PlaceTower(int col, int row, TowerType type = TowerType.Basic)
+        {
+            if (!CanPlaceTower(col, row, type)) return;
+            var t = new Tower(col, row, type);
+            Towers.Add(t);
+            Resources.EarnGold(-t.Cost);
         }
 
         public void StartWave() => Waves.StartNextWave();
@@ -30,10 +34,11 @@ namespace TowerDefense.Model
         public void Update()
         {
             if (IsGameOver) return;
-
             if (Waves.ShouldSpawn(out int hp))
-                Enemies.Add(new Enemy(Field.Path, Field.CellSize, hp));
-
+            {
+                var type = (hp > 3) ? EnemyType.Tank : (hp > 1 ? EnemyType.Normal : EnemyType.Fast);
+                Enemies.Add(new Enemy(Field.Path, Field.CellSize, hp, type));
+            }
             foreach (var tower in Towers)
             {
                 if (tower.TryShoot(Enemies, Field.CellSize, out _, out var projectile))
@@ -49,28 +54,13 @@ namespace TowerDefense.Model
                 if (Projectiles[i].HasHit || Projectiles[i].Target.IsDead)
                     Projectiles.RemoveAt(i);
             }
-
             for (int i = Enemies.Count - 1; i >= 0; i--)
             {
                 Enemies[i].Update();
-                if (Enemies[i].IsDead)
-                {
-                    Score += 10;
-                    Resources.EarnGold(20);
-                    Enemies.RemoveAt(i);
-                }
-                else if (Enemies[i].ReachedEnd)
-                {
-                    Resources.LoseBaseHp(1);
-                    Enemies.RemoveAt(i);
-                }
+                if (Enemies[i].IsDead)  { Score += 10; Resources.EarnGold(20); Enemies.RemoveAt(i); }
+                else if (Enemies[i].ReachedEnd) { Resources.LoseBaseHp(1); Enemies.RemoveAt(i); }
             }
-
-            if (Waves.IsWaveComplete(Enemies))
-            {
-                Resources.EarnGold(50);
-                Waves.StartNextWave();
-            }
+            if (Waves.IsWaveComplete(Enemies)) { Resources.EarnGold(50); Waves.StartNextWave(); }
         }
     }
 }
