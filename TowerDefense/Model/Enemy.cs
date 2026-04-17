@@ -13,16 +13,18 @@ namespace TowerDefense.Model
         public int Health { get; private set; }
         public bool IsDead => Health <= 0;
         public EnemyType Type { get; }
+        public int PathIndex { get; } // Индекс пути (0 или 1)
 
         private readonly List<Point> path;
         private int segmentIndex;
         private float segmentProgress;
         private readonly int cellSize;
 
-        public Enemy(List<Point> path, int cellSize, int health = 3, EnemyType type = EnemyType.Normal)
+        public Enemy(List<Point> path, int cellSize, int health = 3, EnemyType type = EnemyType.Normal, int pathIndex = 0)
         {
             this.path = path; this.cellSize = cellSize;
             Type = type; MaxHealth = health; Health = health;
+            PathIndex = pathIndex;
             Speed = type switch { EnemyType.Fast => 3f, EnemyType.Tank => 0.8f, _ => 1.5f };
             X = path[0].X * cellSize + cellSize / 2f;
             Y = path[0].Y * cellSize + cellSize / 2f;

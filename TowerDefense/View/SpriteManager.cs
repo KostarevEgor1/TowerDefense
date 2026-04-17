@@ -10,7 +10,7 @@ namespace TowerDefense.View
     public static class SpriteManager
     {
         private static Dictionary<TowerType, Bitmap> towerSprites = new();
-        private static Bitmap? enemySprite;
+        private static Dictionary<EnemyType, Bitmap> enemySprites = new();
         private static Bitmap? projectileSprite;
 
         public static Bitmap GetTowerSprite(TowerType type = TowerType.Basic)
@@ -40,22 +40,31 @@ namespace TowerDefense.View
             return fallback;
         }
 
-        public static Bitmap GetEnemySprite()
+        public static Bitmap GetEnemySprite(EnemyType type = EnemyType.Normal)
         {
-            if (enemySprite != null) return enemySprite;
+            if (enemySprites.ContainsKey(type)) return enemySprites[type];
             
-            string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "enemy_normal.png");
+            string filename = type switch
+            {
+                EnemyType.Normal => "enemy_normal.png",
+                EnemyType.Tank => "enemy_tank.png",
+                EnemyType.Fast => "enemy_normal.png", // Используем normal для fast
+                _ => "enemy_normal.png"
+            };
+            
+            string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", filename);
             if (File.Exists(path))
             {
-                enemySprite = new Bitmap(path);
-                return enemySprite;
+                enemySprites[type] = new Bitmap(path);
+                return enemySprites[type];
             }
             
             // Fallback
-            enemySprite = new Bitmap(28, 28);
-            using var g = Graphics.FromImage(enemySprite);
+            var fallback = new Bitmap(28, 28);
+            using var g = Graphics.FromImage(fallback);
             g.Clear(Color.Red);
-            return enemySprite;
+            enemySprites[type] = fallback;
+            return fallback;
         }
 
         public static Bitmap GetProjectileSprite()

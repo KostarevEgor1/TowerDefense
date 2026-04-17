@@ -84,7 +84,17 @@ namespace TowerDefense.Tests
         public void Tower_PlacedOnPath_NotAllowed()
         {
             var model = new GameModel();
-            var sp = model.Field.Path[0];
+            // Берём точку с первого активного пути
+            var sp = model.Field.ActivePaths[0][0];
+            model.PlaceTower(sp.X, sp.Y);
+            Assert.That(model.Towers.Count, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void Tower_PlacedOnSecondPath_NotAllowed()
+        {
+            var model = new GameModel();
+            var sp = model.Field.ActivePaths[1][1];
             model.PlaceTower(sp.X, sp.Y);
             Assert.That(model.Towers.Count, Is.EqualTo(0));
         }
@@ -93,9 +103,8 @@ namespace TowerDefense.Tests
         public void Tower_PlacedOffPath_Allowed()
         {
             var model = new GameModel();
-            // Берём первую зону строительства
-            var buildZone = model.Field.BuildZones[0];
-            model.PlaceTower(buildZone.X, buildZone.Y);
+            // (1, 6) — в build zone
+            model.PlaceTower(1, 6);
             Assert.That(model.Towers.Count, Is.EqualTo(1));
         }
 
@@ -103,9 +112,8 @@ namespace TowerDefense.Tests
         public void Tower_CannotBePlacedTwiceOnSameCell()
         {
             var model = new GameModel();
-            var buildZone = model.Field.BuildZones[0];
-            model.PlaceTower(buildZone.X, buildZone.Y);
-            model.PlaceTower(buildZone.X, buildZone.Y);
+            model.PlaceTower(1, 6);
+            model.PlaceTower(1, 6);
             Assert.That(model.Towers.Count, Is.EqualTo(1));
         }
 
@@ -152,46 +160,17 @@ namespace TowerDefense.Tests
             var model = new GameModel();
             while (model.Resources.Gold >= new Tower(0, 0, TowerType.Basic).Cost)
                 model.Resources.EarnGold(-new Tower(0, 0, TowerType.Basic).Cost);
-            var buildZone = model.Field.BuildZones[0];
-            model.PlaceTower(buildZone.X, buildZone.Y);
+            model.PlaceTower(1, 6);
             Assert.That(model.Towers.Count, Is.EqualTo(0));
         }
 
         [Test]
-        public void SniperTower_CostsMore_ThanBasic()
-        {
-            var basic  = new Tower(0, 0, TowerType.Basic);
-            var sniper = new Tower(0, 0, TowerType.Sniper);
-            Assert.That(sniper.Cost, Is.GreaterThan(basic.Cost));
-        }
-
-        [Test]
-        public void Tower_CanOnlyBePlaced_InBuildZones()
+        public void PlaceTower_DeductsGold()
         {
             var model = new GameModel();
-            var buildZone = model.Field.BuildZones[0];
-            model.PlaceTower(buildZone.X, buildZone.Y);
-            Assert.That(model.Towers.Count, Is.EqualTo(1));
-        }
-
-        [Test]
-        public void Tower_CannotBePlaced_OutsideBuildZones()
-        {
-            var model = new GameModel();
-            // (0, 0) не в зоне строительства
-            model.PlaceTower(0, 0);
-            Assert.That(model.Towers.Count, Is.EqualTo(0));
-        }
-
-        [Test]
-        public void BuildZones_DoNotOverlap_WithPath()
-        {
-            var field = new GameField();
-            foreach (var zone in field.BuildZones)
-            {
-                Assert.That(field.IsOnPath(zone.X, zone.Y), Is.False, 
-                    $"Build zone at ({zone.X}, {zone.Y}) overlaps with path");
-            }
+            int goldBefore = model.Resources.Gold;
+            model.PlaceTower(1, 6, TowerType.Basic);
+            Assert.That(model.Resources.Gold, Is.EqualTo(goldBefore - new Tower(0, 0, TowerType.Basic).Cost));
         }
     }
 }

@@ -21,6 +21,23 @@ namespace TowerDefense.Tests
             Assert.That(wm.WaveInProgress, Is.True);
             Assert.That(wm.CurrentWave, Is.EqualTo(1));
         }
+
+        [Test]
+        public void WaveNumber_IncrementsEachWave()
+        {
+            var wm = new WaveManager();
+            wm.StartNextWave();
+            wm.StartNextWave();
+            Assert.That(wm.CurrentWave, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void ShouldSpawn_ReturnsFalse_WhenWaveNotStarted()
+        {
+            var wm = new WaveManager();
+            bool spawned = wm.ShouldSpawn(out _, out _);
+            Assert.That(spawned, Is.False);
+        }
     }
 
     [TestFixture]
@@ -46,7 +63,26 @@ namespace TowerDefense.Tests
         public void LoseBaseHp_TriggersGameOver()
         {
             var r = new ResourceManager();
-            for (int i = 0; i < 100; i++) r.LoseBaseHp(1);
+            // Уничтожаем первую часть базы
+            for (int i = 0; i < 100; i++) r.LoseBase1Hp(1);
+            Assert.That(r.IsGameOver(), Is.True);
+        }
+
+        [Test]
+        public void EarnGold_IncreasesGold()
+        {
+            var r = new ResourceManager();
+            int before = r.Gold;
+            r.EarnGold(50);
+            Assert.That(r.Gold, Is.EqualTo(before + 50));
+        }
+
+        [Test]
+        public void BaseHp_DoesNotGoNegative_GameOverAtZero()
+        {
+            var r = new ResourceManager();
+            // Уничтожаем вторую часть базы
+            r.LoseBase2Hp(r.Base2Hp);
             Assert.That(r.IsGameOver(), Is.True);
         }
     }

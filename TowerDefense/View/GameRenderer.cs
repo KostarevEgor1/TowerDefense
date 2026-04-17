@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using TowerDefense.Model;
 
 namespace TowerDefense.View
@@ -9,25 +10,38 @@ namespace TowerDefense.View
         private readonly GameModel model;
         public GameRenderer(GameModel model) => this.model = model;
 
+        private static readonly Color[] PathColors =
+        {
+            Color.FromArgb(180, 200, 140),
+            Color.FromArgb(200, 160, 120),
+        };
+
         public void Draw(Graphics g, Point mouseCell, TowerType selectedType = TowerType.Basic)
         {
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
             g.Clear(Color.FromArgb(34, 85, 34));
             var field = model.Field;
 
-            using var gridPen = new Pen(Color.FromArgb(25, 0, 0, 0));
+            using var gridPen = new Pen(Color.FromArgb(20, 0, 0, 0));
             for (int c = 0; c <= field.Cols; c++)
                 g.DrawLine(gridPen, c * field.CellSize, 0, c * field.CellSize, field.Rows * field.CellSize);
             for (int r = 0; r <= field.Rows; r++)
                 g.DrawLine(gridPen, 0, r * field.CellSize, field.Cols * field.CellSize, r * field.CellSize);
 
-            using var pathBrush = new SolidBrush(Color.FromArgb(200, 160, 120));
             for (int c = 0; c < field.Cols; c++)
                 for (int r = 0; r < field.Rows; r++)
-                    if (field.IsOnPath(c, r))
-                        g.FillRectangle(pathBrush, c * field.CellSize, r * field.CellSize, field.CellSize, field.CellSize);
-            
-            // Зоны строительства
+                {
+                    int idx = field.PathIndexForCell(c, r);
+                    if (idx < 0) continue;
+                    var color = PathColors[idx % PathColors.Length];
+                    g.FillRectangle(new SolidBrush(color),
+                        c * field.CellSize, r * field.CellSize, field.CellSize, field.CellSize);
+                    using var edge = new Pen(Color.FromArgb(140, 110, 70), 1);
+                    g.DrawRectangle(edge,
+                        c * field.CellSize, r * field.CellSize, field.CellSize, field.CellSize);
+                }
+
+            // Зоны строительства (статические)
             using var buildZoneBrush = new SolidBrush(Color.FromArgb(40, 100, 150, 100));
             using var buildZonePen = new Pen(Color.FromArgb(120, 100, 200, 100), 2);
             foreach (var zone in field.BuildZones)
@@ -38,13 +52,71 @@ namespace TowerDefense.View
                     field.CellSize - 4, field.CellSize - 4);
             }
             
-            using var labelFont = new Font("Arial", 10, FontStyle.Bold);
-            var startPoint = field.Path[0]; 
-            var endPoint = field.Path[field.Path.Count - 1];
-            g.FillRectangle(Brushes.LimeGreen, startPoint.X * field.CellSize, startPoint.Y * field.CellSize, field.CellSize, field.CellSize);
-            g.DrawString("S", labelFont, Brushes.Black, startPoint.X * field.CellSize + 12, startPoint.Y * field.CellSize + 11);
-            g.FillRectangle(Brushes.Crimson, endPoint.X * field.CellSize, endPoint.Y * field.CellSize, field.CellSize, field.CellSize);
-            g.DrawString("E", labelFont, Brushes.White, endPoint.X * field.CellSize + 12, endPoint.Y * field.CellSize + 11);
+            // Динамические зоны строительства (вплотную к путям)
+            using var dynamicBuildZoneBrush = new SolidBrush(Color.FromArgb(50, 255, 200, 100));
+            using var dynamicBuildZonePen = new Pen(Color.FromArgb(150, 255, 200, 100), 2);
+            int path1Y = field.ActivePaths[0][0].Y;
+            int[] dynamicCols = { 2, 7, 12, 17 };
+            
+            // Вплотную к пути 1
+            foreach (int col in dynamicCols)
+            {
+                // Сверху от пути
+                g.FillRectangle(dynamicBuildZoneBrush, col * field.CellSize, (path1Y - 1) * field.CellSize, 
+                    field.CellSize, field.CellSize);
+                g.DrawRectangle(dynamicBuildZonePen, col * field.CellSize + 2, (path1Y - 1) * field.CellSize + 2, 
+                    field.CellSize - 4, field.CellSize - 4);
+                // Снизу от пути
+                g.FillRectangle(dynamicBuildZoneBrush, col * field.CellSize, (path1Y + 1) * field.CellSize, 
+                    field.CellSize, field.CellSize);
+                g.DrawRectangle(dynamicBuildZonePen, col * field.CellSize + 2, (path1Y + 1) * field.CellSize + 2, 
+                    field.CellSize - 4, field.CellSize - 4);
+            }
+            
+            // Вплотную к пути 2 (y=10)
+            foreach (int col in dynamicCols)
+            {
+                // Сверху от пути (y=9)
+                g.FillRectangle(dynamicBuildZoneBrush, col * field.CellSize, 9 * field.CellSize, 
+                    field.CellSize, field.CellSize);
+                g.DrawRectangle(dynamicBuildZonePen, col * field.CellSize + 2, 9 * field.CellSize + 2, 
+                    field.CellSize - 4, field.CellSize - 4);
+                // Снизу от пути (y=11)
+                g.FillRectangle(dynamicBuildZoneBrush, col * field.CellSize, 11 * field.CellSize, 
+                    field.CellSize, field.CellSize);
+                g.DrawRectangle(dynamicBuildZonePen, col * field.CellSize + 2, 11 * field.CellSize + 2, 
+                    field.CellSize - 4, field.CellSize - 4);
+            }
+
+            using var lf = new Font("Arial", 8, FontStyle.Bold);
+            for (int i = 0; i < field.ActivePaths.Count; i++)
+            {
+                var path = field.ActivePaths[i];
+                var sp = path[0];
+                string label = i == 0 ? "S1" : "S2";
+                g.FillRectangle(Brushes.LimeGreen,
+                    sp.X * field.CellSize, sp.Y * field.CellSize, field.CellSize, field.CellSize);
+                g.DrawString(label, lf, Brushes.Black,
+                    sp.X * field.CellSize + 6, sp.Y * field.CellSize + 12);
+                
+                // Конец каждого пути - база
+                var ep = path[path.Count - 1];
+                string baseLabel = i == 0 ? "База 1" : "База 2";
+                int baseHp = i == 0 ? model.Resources.Base1Hp : model.Resources.Base2Hp;
+                
+                // Рисуем базу
+                g.FillRectangle(Brushes.Crimson,
+                    ep.X * field.CellSize, ep.Y * field.CellSize, field.CellSize, field.CellSize);
+                
+                // Название базы
+                using var baseFont = new Font("Arial", 7, FontStyle.Bold);
+                g.DrawString(baseLabel, baseFont, Brushes.White,
+                    ep.X * field.CellSize + 2, ep.Y * field.CellSize + 8);
+                
+                // HP базы
+                g.DrawString($"{baseHp}HP", baseFont, Brushes.Yellow,
+                    ep.X * field.CellSize + 4, ep.Y * field.CellSize + 22);
+            }
 
             foreach (var tower in model.Towers)
             {
@@ -60,16 +132,16 @@ namespace TowerDefense.View
                 using var rangePen = new Pen(Color.FromArgb(30, 100, 180, 255), 1);
                 g.DrawEllipse(rangePen, cx - tower.Range, cy - tower.Range, tower.Range * 2, tower.Range * 2);
             }
-            
+
             foreach (var projectile in model.Projectiles)
             {
                 var sprite = SpriteManager.GetProjectileSprite();
                 g.DrawImage(sprite, projectile.X - sprite.Width / 2, projectile.Y - sprite.Height / 2);
             }
-            
+
             foreach (var enemy in model.Enemies)
             {
-                var sprite = SpriteManager.GetEnemySprite();
+                var sprite = SpriteManager.GetEnemySprite(enemy.Type);
                 float ex = enemy.X - sprite.Width / 2;
                 float ey = enemy.Y - sprite.Height / 2;
                 g.DrawImage(sprite, ex, ey);
