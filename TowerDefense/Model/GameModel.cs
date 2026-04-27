@@ -8,6 +8,7 @@ namespace TowerDefense.Model
         public List<Enemy> Enemies { get; } = new List<Enemy>();
         public List<Tower> Towers { get; } = new List<Tower>();
         public List<Projectile> Projectiles { get; } = new List<Projectile>();
+        public List<ImpactEffect> ImpactEffects { get; } = new List<ImpactEffect>();
         public WaveManager Waves { get; } = new WaveManager();
         public ResourceManager Resources { get; } = new ResourceManager();
         public int Score { get; private set; }
@@ -60,8 +61,22 @@ namespace TowerDefense.Model
             for (int i = Projectiles.Count - 1; i >= 0; i--)
             {
                 Projectiles[i].Update();
-                if (Projectiles[i].HasHit || Projectiles[i].Target.IsDead)
+                if (Projectiles[i].HasHit)
+                {
+                    ImpactEffects.Add(new ImpactEffect(Projectiles[i].X, Projectiles[i].Y, ImpactEffectType.Hit));
                     Projectiles.RemoveAt(i);
+                }
+                else if (Projectiles[i].Target.IsDead)
+                {
+                    Projectiles.RemoveAt(i);
+                }
+            }
+
+            for (int i = ImpactEffects.Count - 1; i >= 0; i--)
+            {
+                ImpactEffects[i].Update();
+                if (ImpactEffects[i].IsExpired)
+                    ImpactEffects.RemoveAt(i);
             }
 
             for (int i = Enemies.Count - 1; i >= 0; i--)
@@ -69,6 +84,7 @@ namespace TowerDefense.Model
                 Enemies[i].Update();
                 if (Enemies[i].IsDead) 
                 { 
+                    ImpactEffects.Add(new ImpactEffect(Enemies[i].X, Enemies[i].Y, ImpactEffectType.Death));
                     Score += 10; 
                     Resources.EarnGold(20); 
                     Enemies.RemoveAt(i); 

@@ -6,6 +6,8 @@ namespace TowerDefense.Model
     {
         public float X { get; private set; }
         public float Y { get; private set; }
+        public float PreviousX { get; private set; }
+        public float PreviousY { get; private set; }
         public Enemy Target { get; }
         public int Damage { get; }
         public float Speed { get; } = 8f;
@@ -15,6 +17,8 @@ namespace TowerDefense.Model
         {
             X = startX;
             Y = startY;
+            PreviousX = startX;
+            PreviousY = startY;
             Target = target;
             Damage = damage;
         }
@@ -29,11 +33,15 @@ namespace TowerDefense.Model
 
             if (dist <= Speed)
             {
+                PreviousX = X;
+                PreviousY = Y;
                 Target.TakeDamage(Damage);
                 HasHit = true;
                 return;
             }
 
+            PreviousX = X;
+            PreviousY = Y;
             X += (dx / dist) * Speed;
             Y += (dy / dist) * Speed;
         }

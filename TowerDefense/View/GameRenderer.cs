@@ -1,194 +1,367 @@
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.Windows.Forms;
 using TowerDefense.Model;
 
 namespace TowerDefense.View
 {
     public class GameRenderer
     {
-        private readonly GameModel model;
-        public GameRenderer(GameModel model) => this.model = model;
+        private readonly IGameScene scene;
 
-        private static readonly Color[] PathColors =
+        public GameRenderer(IGameScene scene)
         {
-            Color.FromArgb(180, 200, 140),
-            Color.FromArgb(200, 160, 120),
-        };
+            this.scene = scene;
+        }
 
         public void Draw(Graphics g, Point mouseCell, TowerType selectedType = TowerType.Basic)
         {
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.Clear(Color.FromArgb(34, 85, 34));
-            var field = model.Field;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-            using var gridPen = new Pen(Color.FromArgb(20, 0, 0, 0));
-            for (int c = 0; c <= field.Cols; c++)
-                g.DrawLine(gridPen, c * field.CellSize, 0, c * field.CellSize, field.Rows * field.CellSize);
-            for (int r = 0; r <= field.Rows; r++)
-                g.DrawLine(gridPen, 0, r * field.CellSize, field.Cols * field.CellSize, r * field.CellSize);
+            DrawBackground(g);
+            DrawPaths(g);
+            DrawBuildCells(g);
+            DrawPathMarkers(g);
+            DrawProjectiles(g);
+            DrawEnemies(g);
+            DrawTowers(g, mouseCell);
+            DrawImpactEffects(g);
+            DrawPlacementPreview(g, mouseCell, selectedType);
+        }
+
+        private void DrawBackground(Graphics g)
+        {
+            var field = scene.Field;
+            int width = field.Cols * field.CellSize;
+            int height = field.Rows * field.CellSize;
+            Rectangle bounds = new(0, 0, width, height);
+
+            using (var background = new LinearGradientBrush(bounds, VisualTheme.FieldTop, VisualTheme.FieldBottom, 90f))
+            {
+                g.FillRectangle(background, bounds);
+            }
+
+            DrawAmbientGlow(g, new RectangleF(40, 50, 250, 210), VisualTheme.AccentBlue, 28);
+            DrawAmbientGlow(g, new RectangleF(width - 270, 30, 220, 220), VisualTheme.AccentAmber, 20);
+            DrawAmbientGlow(g, new RectangleF(width / 2f - 140f, height - 200f, 280f, 190f), VisualTheme.AccentMint, 22);
 
             for (int c = 0; c < field.Cols; c++)
+            {
                 for (int r = 0; r < field.Rows; r++)
                 {
-                    int idx = field.PathIndexForCell(c, r);
-                    if (idx < 0) continue;
-                    var color = PathColors[idx % PathColors.Length];
-                    g.FillRectangle(new SolidBrush(color),
-                        c * field.CellSize, r * field.CellSize, field.CellSize, field.CellSize);
-                    using var edge = new Pen(Color.FromArgb(140, 110, 70), 1);
-                    g.DrawRectangle(edge,
-                        c * field.CellSize, r * field.CellSize, field.CellSize, field.CellSize);
+                    int x = c * field.CellSize;
+                    int y = r * field.CellSize;
+                    Color tile = ((c + r) % 2 == 0)
+                        ? Color.FromArgb(18, 255, 255, 255)
+                        : Color.FromArgb(10, 0, 0, 0);
+                    using var tileBrush = new SolidBrush(tile);
+                    g.FillRectangle(tileBrush, x, y, field.CellSize, field.CellSize);
+
+                    using var accentPen = new Pen(Color.FromArgb(18, 190, 225, 220), 1f);
+                    g.DrawLine(accentPen, x + 8, y + 8, x + 14, y + 8);
+                    g.DrawLine(accentPen, x + 8, y + 8, x + 8, y + 14);
                 }
-
-            // Зоны строительства (статические)
-            using var buildZoneBrush = new SolidBrush(Color.FromArgb(40, 100, 150, 100));
-            using var buildZonePen = new Pen(Color.FromArgb(120, 100, 200, 100), 2);
-            foreach (var zone in field.BuildZones)
-            {
-                g.FillRectangle(buildZoneBrush, zone.X * field.CellSize, zone.Y * field.CellSize, 
-                    field.CellSize, field.CellSize);
-                g.DrawRectangle(buildZonePen, zone.X * field.CellSize + 2, zone.Y * field.CellSize + 2, 
-                    field.CellSize - 4, field.CellSize - 4);
-            }
-            
-            // Динамические зоны строительства (вплотную к путям)
-            using var dynamicBuildZoneBrush = new SolidBrush(Color.FromArgb(50, 255, 200, 100));
-            using var dynamicBuildZonePen = new Pen(Color.FromArgb(150, 255, 200, 100), 2);
-            int path1Y = field.ActivePaths[0][0].Y;
-            int[] dynamicCols = { 2, 7, 12, 17 };
-            
-            // Вплотную к пути 1
-            foreach (int col in dynamicCols)
-            {
-                // Сверху от пути
-                g.FillRectangle(dynamicBuildZoneBrush, col * field.CellSize, (path1Y - 1) * field.CellSize, 
-                    field.CellSize, field.CellSize);
-                g.DrawRectangle(dynamicBuildZonePen, col * field.CellSize + 2, (path1Y - 1) * field.CellSize + 2, 
-                    field.CellSize - 4, field.CellSize - 4);
-                // Снизу от пути
-                g.FillRectangle(dynamicBuildZoneBrush, col * field.CellSize, (path1Y + 1) * field.CellSize, 
-                    field.CellSize, field.CellSize);
-                g.DrawRectangle(dynamicBuildZonePen, col * field.CellSize + 2, (path1Y + 1) * field.CellSize + 2, 
-                    field.CellSize - 4, field.CellSize - 4);
-            }
-            
-            // Вплотную к пути 2 (y=10)
-            foreach (int col in dynamicCols)
-            {
-                // Сверху от пути (y=9)
-                g.FillRectangle(dynamicBuildZoneBrush, col * field.CellSize, 9 * field.CellSize, 
-                    field.CellSize, field.CellSize);
-                g.DrawRectangle(dynamicBuildZonePen, col * field.CellSize + 2, 9 * field.CellSize + 2, 
-                    field.CellSize - 4, field.CellSize - 4);
-                // Снизу от пути (y=11)
-                g.FillRectangle(dynamicBuildZoneBrush, col * field.CellSize, 11 * field.CellSize, 
-                    field.CellSize, field.CellSize);
-                g.DrawRectangle(dynamicBuildZonePen, col * field.CellSize + 2, 11 * field.CellSize + 2, 
-                    field.CellSize - 4, field.CellSize - 4);
             }
 
-            using var lf = new Font("Arial", 8, FontStyle.Bold);
+            using var gridPen = new Pen(VisualTheme.FieldGrid, 1f);
+            for (int c = 0; c <= field.Cols; c++)
+            {
+                g.DrawLine(gridPen, c * field.CellSize, 0, c * field.CellSize, height);
+            }
+            for (int r = 0; r <= field.Rows; r++)
+            {
+                g.DrawLine(gridPen, 0, r * field.CellSize, width, r * field.CellSize);
+            }
+        }
+
+        private void DrawPaths(Graphics g)
+        {
+            var field = scene.Field;
+
+            for (int c = 0; c < field.Cols; c++)
+            {
+                for (int r = 0; r < field.Rows; r++)
+                {
+                    int pathIndex = field.PathIndexForCell(c, r);
+                    if (pathIndex < 0)
+                    {
+                        continue;
+                    }
+
+                    int x = c * field.CellSize;
+                    int y = r * field.CellSize;
+                    Rectangle laneRect = new(x + 3, y + 3, field.CellSize - 6, field.CellSize - 6);
+                    Color accent = pathIndex == 0 ? VisualTheme.PathA : VisualTheme.PathB;
+                    Color bottom = VisualTheme.Blend(accent, Color.Black, 0.42f);
+
+                    using (var path = VisualTheme.CreateRoundedRect(laneRect, 9f))
+                    using (var fill = new LinearGradientBrush(laneRect, accent, bottom, 90f))
+                    using (var border = new Pen(VisualTheme.WithAlpha(accent, 220), 1.4f))
+                    {
+                        g.FillPath(fill, path);
+                        g.DrawPath(border, path);
+                    }
+
+                }
+            }
+        }
+
+        private void DrawBuildCells(Graphics g)
+        {
+            var field = scene.Field;
+
+            for (int c = 0; c < field.Cols; c++)
+            {
+                for (int r = 0; r < field.Rows; r++)
+                {
+                    if (!field.IsInBuildZone(c, r) || field.IsOnAnyPath(c, r))
+                    {
+                        continue;
+                    }
+
+                    int x = c * field.CellSize;
+                    int y = r * field.CellSize;
+                    Rectangle pad = new(x + 6, y + 6, field.CellSize - 12, field.CellSize - 12);
+
+                    DrawAmbientGlow(g, new RectangleF(x + 4, y + 4, field.CellSize - 8, field.CellSize - 8), VisualTheme.BuildPadGlow, 34);
+                    using (var path = VisualTheme.CreateRoundedRect(pad, 10f))
+                    using (var fill = new LinearGradientBrush(pad, Color.FromArgb(92, 26, 56, 60), Color.FromArgb(148, 18, 32, 44), 90f))
+                    using (var border = new Pen(Color.FromArgb(150, 114, 225, 206), 1.4f))
+                    {
+                        g.FillPath(fill, path);
+                        g.DrawPath(border, path);
+                    }
+
+                    using (var ring = new Pen(Color.FromArgb(140, 170, 255, 232), 1.4f))
+                    {
+                        g.DrawEllipse(ring, x + 12, y + 12, field.CellSize - 24, field.CellSize - 24);
+                    }
+
+                    using var dot = new SolidBrush(Color.FromArgb(165, 214, 245, 236));
+                    g.FillEllipse(dot, x + field.CellSize / 2 - 2, y + field.CellSize / 2 - 2, 4, 4);
+                }
+            }
+        }
+
+        private void DrawPathMarkers(Graphics g)
+        {
+            var field = scene.Field;
+
             for (int i = 0; i < field.ActivePaths.Count; i++)
             {
                 var path = field.ActivePaths[i];
-                var sp = path[0];
-                string label = i == 0 ? "S1" : "S2";
-                g.FillRectangle(Brushes.LimeGreen,
-                    sp.X * field.CellSize, sp.Y * field.CellSize, field.CellSize, field.CellSize);
-                g.DrawString(label, lf, Brushes.Black,
-                    sp.X * field.CellSize + 6, sp.Y * field.CellSize + 12);
-                
-                // Конец каждого пути - база
-                var ep = path[path.Count - 1];
-                string baseLabel = i == 0 ? "База 1" : "База 2";
-                int baseHp = i == 0 ? model.Resources.Base1Hp : model.Resources.Base2Hp;
-                
-                // Рисуем базу
-                g.FillRectangle(Brushes.Crimson,
-                    ep.X * field.CellSize, ep.Y * field.CellSize, field.CellSize, field.CellSize);
-                
-                // Название базы
-                using var baseFont = new Font("Arial", 7, FontStyle.Bold);
-                g.DrawString(baseLabel, baseFont, Brushes.White,
-                    ep.X * field.CellSize + 2, ep.Y * field.CellSize + 8);
-                
-                // HP базы
-                g.DrawString($"{baseHp}HP", baseFont, Brushes.Yellow,
-                    ep.X * field.CellSize + 4, ep.Y * field.CellSize + 22);
+                var end = path[path.Count - 1];
+                DrawMarkerCell(g, end.X, end.Y, VisualTheme.AccentCoral, string.Empty, null, null, null);
+            }
+        }
+
+        private void DrawMarkerCell(Graphics g, int col, int row, Color accent, string title, Font? titleFont, string? footer, Font? footerFont)
+        {
+            var field = scene.Field;
+            int x = col * field.CellSize + 4;
+            int y = row * field.CellSize + 4;
+            Rectangle rect = new(x, y, field.CellSize - 8, field.CellSize - 8);
+
+            using (var path = VisualTheme.CreateRoundedRect(rect, 9f))
+            using (var fill = new LinearGradientBrush(rect, VisualTheme.Blend(accent, Color.White, 0.14f), VisualTheme.Blend(accent, Color.Black, 0.45f), 90f))
+            using (var border = new Pen(Color.FromArgb(215, accent), 1.5f))
+            {
+                g.FillPath(fill, path);
+                g.DrawPath(border, path);
             }
 
-            foreach (var tower in model.Towers)
+            if (!string.IsNullOrWhiteSpace(title) && titleFont != null)
+            {
+                TextRenderer.DrawText(g, title, titleFont, new Rectangle(x, y + 4, rect.Width, 14), Color.WhiteSmoke,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            }
+
+            if (!string.IsNullOrWhiteSpace(footer) && footerFont != null)
+            {
+                TextRenderer.DrawText(g, footer, footerFont, new Rectangle(x, y + 18, rect.Width, 12), VisualTheme.AccentGold,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            }
+        }
+
+        private void DrawTowers(Graphics g, Point mouseCell)
+        {
+            var field = scene.Field;
+            Tower? hoveredTower = null;
+            foreach (var tower in scene.Towers)
+            {
+                if (tower.Col == mouseCell.X && tower.Row == mouseCell.Y)
+                {
+                    hoveredTower = tower;
+                    break;
+                }
+            }
+
+            foreach (var tower in scene.Towers)
             {
                 int tx = tower.Col * field.CellSize;
                 int ty = tower.Row * field.CellSize;
+                Color accent = VisualTheme.TowerAccent(tower.Type);
+
+                if (hoveredTower == tower)
+                {
+                    DrawRange(g, tx, ty, tower.Range, accent);
+                }
+
+                DrawAmbientGlow(g, new RectangleF(tx + 4, ty + 5, field.CellSize - 8, field.CellSize - 6), accent, hoveredTower == tower ? 48 : 24);
+                using (var baseShadow = new SolidBrush(Color.FromArgb(70, 0, 0, 0)))
+                {
+                    g.FillEllipse(baseShadow, tx + 8, ty + field.CellSize - 12, field.CellSize - 16, 8);
+                }
+
+                using (var ring = new Pen(Color.FromArgb(hoveredTower == tower ? 180 : 120, accent), hoveredTower == tower ? 2f : 1.2f))
+                {
+                    g.DrawEllipse(ring, tx + 8, ty + field.CellSize - 18, field.CellSize - 16, 10);
+                }
+
                 var sprite = SpriteManager.GetTowerSprite(tower.Type);
-                int offsetX = (field.CellSize - sprite.Width) / 2;
-                int offsetY = (field.CellSize - sprite.Height) / 2;
-                g.DrawImage(sprite, tx + offsetX, ty + offsetY);
-                
-                float cx = tower.Col * field.CellSize + field.CellSize / 2f;
-                float cy = tower.Row * field.CellSize + field.CellSize / 2f;
-                using var rangePen = new Pen(Color.FromArgb(30, 100, 180, 255), 1);
-                g.DrawEllipse(rangePen, cx - tower.Range, cy - tower.Range, tower.Range * 2, tower.Range * 2);
+                var targetRect = new Rectangle(tx + 2, ty + 1, field.CellSize - 4, field.CellSize - 2);
+                g.DrawImage(sprite, targetRect);
             }
+        }
 
-            foreach (var projectile in model.Projectiles)
+        private void DrawProjectiles(Graphics g)
+        {
+            var sprite = SpriteManager.GetProjectileSprite();
+            foreach (var projectile in scene.Projectiles)
             {
-                var sprite = SpriteManager.GetProjectileSprite();
-                g.DrawImage(sprite, projectile.X - sprite.Width / 2, projectile.Y - sprite.Height / 2);
-            }
+                using (var trailPen = new Pen(Color.FromArgb(120, 255, 188, 112), 2.4f))
+                {
+                    trailPen.StartCap = LineCap.Round;
+                    trailPen.EndCap = LineCap.Round;
+                    g.DrawLine(trailPen, projectile.PreviousX, projectile.PreviousY, projectile.X, projectile.Y);
+                }
 
-            foreach (var enemy in model.Enemies)
+                g.DrawImage(sprite, projectile.X - sprite.Width / 2f, projectile.Y - sprite.Height / 2f);
+            }
+        }
+
+        private void DrawEnemies(Graphics g)
+        {
+            foreach (var enemy in scene.Enemies)
             {
                 var sprite = SpriteManager.GetEnemySprite(enemy.Type);
-                float ex = enemy.X - sprite.Width / 2;
-                float ey = enemy.Y - sprite.Height / 2;
-                g.DrawImage(sprite, ex, ey);
-                
-                float hpRatio = (float)enemy.Health / enemy.MaxHealth;
-                g.FillRectangle(Brushes.DarkGray, ex, ey - 6, sprite.Width, 4);
-                g.FillRectangle(hpRatio > 0.5f ? Brushes.LimeGreen : Brushes.Red,
-                    ex, ey - 6, sprite.Width * hpRatio, 4);
+                float drawSize = enemy.Type == EnemyType.Tank ? 36f : 32f;
+                float ex = enemy.X - drawSize / 2f;
+                float ey = enemy.Y - drawSize / 2f;
+                Color accent = VisualTheme.EnemyAccent(enemy.Type);
+
+                using (var shadow = new SolidBrush(Color.FromArgb(78, 0, 0, 0)))
+                {
+                    g.FillEllipse(shadow, ex + 5, ey + drawSize - 6, drawSize - 10, 7);
+                }
+
+                g.DrawImage(sprite, ex, ey - 1, drawSize, drawSize);
+
+                float hpRatio = Math.Max(0f, (float)enemy.Health / enemy.MaxHealth);
+                RectangleF hpRect = new(ex, ey - 9, drawSize, 6);
+                using (var back = new SolidBrush(Color.FromArgb(145, 10, 14, 18)))
+                using (var border = new Pen(Color.FromArgb(120, 255, 255, 255), 1f))
+                using (var fill = new SolidBrush(Color.FromArgb(220, hpRatio > 0.45f ? accent : VisualTheme.AccentCoral)))
+                {
+                    g.FillRectangle(back, hpRect);
+                    g.FillRectangle(fill, hpRect.X + 1, hpRect.Y + 1, Math.Max(0, (drawSize - 2) * hpRatio), hpRect.Height - 2);
+                    g.DrawRectangle(border, hpRect.X, hpRect.Y, hpRect.Width, hpRect.Height);
+                }
+            }
+        }
+
+        private void DrawImpactEffects(Graphics g)
+        {
+            foreach (var effect in scene.ImpactEffects)
+            {
+                float lifeRatio = effect.MaxLifetime <= 0 ? 0f : (float)effect.Lifetime / effect.MaxLifetime;
+                float progress = 1f - lifeRatio;
+                float baseRadius = effect.Type == ImpactEffectType.Death ? 10f : 5f;
+                float radiusGrowth = effect.Type == ImpactEffectType.Death ? 28f : 18f;
+                float radius = baseRadius + progress * radiusGrowth;
+                int alpha = (int)((effect.Type == ImpactEffectType.Death ? 180 : 150) * lifeRatio);
+                Color tone = effect.Type == ImpactEffectType.Death
+                    ? VisualTheme.AccentCoral
+                    : VisualTheme.AccentAmber;
+
+                DrawAmbientGlow(g, new RectangleF(effect.X - radius, effect.Y - radius, radius * 2, radius * 2), tone, alpha / 3);
+                using var ring = new Pen(Color.FromArgb(alpha, tone), 2f);
+                g.DrawEllipse(ring, effect.X - radius, effect.Y - radius, radius * 2, radius * 2);
+            }
+        }
+
+        private void DrawPlacementPreview(Graphics g, Point mouseCell, TowerType selectedType)
+        {
+            var field = scene.Field;
+            if (mouseCell.X < 0 || mouseCell.X >= field.Cols || mouseCell.Y < 0 || mouseCell.Y >= field.Rows)
+            {
+                return;
+            }
+            bool inBuildZone = field.IsInBuildZone(mouseCell.X, mouseCell.Y);
+            bool occupied = false;
+            foreach (var tower in scene.Towers)
+            {
+                if (tower.Col == mouseCell.X && tower.Row == mouseCell.Y)
+                {
+                    occupied = true;
+                    break;
+                }
             }
 
-            // Превью радиуса башни при наведении
-            if (mouseCell.X >= 0 && mouseCell.X < field.Cols && mouseCell.Y >= 0 && mouseCell.Y < field.Rows)
+            Color accent = VisualTheme.TowerAccent(selectedType);
+            if (!inBuildZone || occupied)
             {
-                if (model.CanPlaceTower(mouseCell.X, mouseCell.Y))
-                {
-                    float cx = mouseCell.X * field.CellSize + field.CellSize / 2f;
-                    float cy = mouseCell.Y * field.CellSize + field.CellSize / 2f;
-                    
-                    // Получаем радиус для выбранного типа башни
-                    float range = selectedType switch
-                    {
-                        TowerType.Sniper => 220f,
-                        TowerType.Rapid => 80f,
-                        _ => 120f
-                    };
-                    
-                    // Полупрозрачный круг радиуса
-                    using var previewBrush = new SolidBrush(Color.FromArgb(40, 100, 200, 100));
-                    g.FillEllipse(previewBrush, cx - range, cy - range, range * 2, range * 2);
-                    
-                    // Обводка
-                    using var previewPen = new Pen(Color.FromArgb(150, 100, 255, 100), 2);
-                    g.DrawEllipse(previewPen, cx - range, cy - range, range * 2, range * 2);
-                    
-                    // Подсветка клетки
-                    using var cellBrush = new SolidBrush(Color.FromArgb(60, 100, 255, 100));
-                    g.FillRectangle(cellBrush, mouseCell.X * field.CellSize, mouseCell.Y * field.CellSize, 
-                        field.CellSize, field.CellSize);
-                }
-                else
-                {
-                    // Красная подсветка если нельзя поставить
-                    using var cellBrush = new SolidBrush(Color.FromArgb(60, 255, 50, 50));
-                    g.FillRectangle(cellBrush, mouseCell.X * field.CellSize, mouseCell.Y * field.CellSize, 
-                        field.CellSize, field.CellSize);
-                }
+                accent = VisualTheme.AccentCoral;
             }
+
+            Rectangle padRect = new(mouseCell.X * field.CellSize + 4, mouseCell.Y * field.CellSize + 4, field.CellSize - 8, field.CellSize - 8);
+            using (var path = VisualTheme.CreateRoundedRect(padRect, 11f))
+            using (var fill = new SolidBrush(Color.FromArgb(54, accent)))
+            using (var border = new Pen(Color.FromArgb(170, accent), 1.8f))
+            {
+                g.FillPath(fill, path);
+                g.DrawPath(border, path);
+            }
+
+            var sprite = SpriteManager.GetTowerSprite(selectedType);
+            DrawImageWithOpacity(g, sprite, new Rectangle(mouseCell.X * field.CellSize + 2, mouseCell.Y * field.CellSize + 1, field.CellSize - 4, field.CellSize - 2), 0.52f);
+        }
+
+        private static void DrawRange(Graphics g, int tx, int ty, float range, Color accent)
+        {
+            float cx = tx + 20f;
+            float cy = ty + 20f;
+            using var fill = new SolidBrush(Color.FromArgb(20, accent));
+            using var pen = new Pen(Color.FromArgb(135, accent), 1.5f);
+            pen.DashStyle = DashStyle.Dash;
+            g.FillEllipse(fill, cx - range, cy - range, range * 2, range * 2);
+            g.DrawEllipse(pen, cx - range, cy - range, range * 2, range * 2);
+        }
+
+        private static void DrawAmbientGlow(Graphics g, RectangleF rect, Color color, int alpha)
+        {
+            using var path = new GraphicsPath();
+            path.AddEllipse(rect);
+            using var brush = new PathGradientBrush(path)
+            {
+                CenterColor = Color.FromArgb(Math.Max(0, Math.Min(255, alpha)), color),
+                SurroundColors = new[] { Color.FromArgb(0, color) }
+            };
+            g.FillPath(brush, path);
+        }
+
+        private static void DrawImageWithOpacity(Graphics g, Image image, Rectangle bounds, float opacity)
+        {
+            using var attributes = new ImageAttributes();
+            var matrix = new ColorMatrix
+            {
+                Matrix33 = Math.Max(0f, Math.Min(1f, opacity))
+            };
+            attributes.SetColorMatrix(matrix, ColorMatrixFlag.Default, ColorAdjustType.Bitmap);
+            g.DrawImage(image, bounds, 0, 0, image.Width, image.Height, GraphicsUnit.Pixel, attributes);
         }
     }
 }

@@ -10,6 +10,8 @@ namespace TowerDefense.Model
         private int spawnedInWave;
         private int enemiesPerWave => 5 + CurrentWave * 3;
         private const int SpawnInterval = 55;
+        public int SpawnedInWave => spawnedInWave;
+        public int EnemiesPerWave => enemiesPerWave;
 
         public bool ShouldSpawn(out int health, out int pathIndex)
         {
