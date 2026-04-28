@@ -19,7 +19,7 @@ namespace TowerDefense
         private readonly AccentButton btnSniper;
         private readonly AccentButton btnRapid;
 
-        private const int HudHeight = 170;
+        private const int HudHeight = 194;
         private Rectangle fieldRect;
         private Rectangle hudRect;
         private Rectangle deckRect;
@@ -45,6 +45,8 @@ namespace TowerDefense
             btnBasic = CreateHudButton("Базовая 50", 132, VisualTheme.AccentMint);
             btnSniper = CreateHudButton("Снайпер 100", 132, VisualTheme.AccentBlue);
             btnRapid = CreateHudButton("Скоростр. 75", 140, VisualTheme.AccentAmber);
+
+            btnWave.Font = new Font("Bahnschrift SemiBold", 11f, FontStyle.Bold);
 
             btnWave.Click += (_, _) =>
             {
@@ -195,6 +197,7 @@ namespace TowerDefense
         private void DrawHud(Graphics g)
         {
             GameHudState hud = controller.GetHudState(selectedType);
+            Rectangle actionStripRect = GetActionStripRect();
 
             VisualTheme.DrawRoundedPanel(
                 g,
@@ -204,7 +207,9 @@ namespace TowerDefense
                 Color.FromArgb(238, 8, 14, 22),
                 VisualTheme.PanelBorder,
                 VisualTheme.PanelHighlight,
-                shadowAlpha: 104);
+                shadowAlpha: 104,
+                drawSheen: false,
+                drawHighlightLine: false);
 
             using var sectionFont = new Font("Bahnschrift SemiBold", 9.5f, FontStyle.Bold);
             TextRenderer.DrawText(g, "УПРАВЛЕНИЕ", sectionFont, new Rectangle(deckRect.Left + 22, deckRect.Top + 12, 200, 18),
@@ -216,7 +221,19 @@ namespace TowerDefense
                     TextFormatFlags.Right | TextFormatFlags.VerticalCenter);
             }
 
-            int statY = deckRect.Top + 64;
+            VisualTheme.DrawRoundedPanel(
+                g,
+                actionStripRect,
+                20f,
+                Color.FromArgb(226, 17, 26, 38),
+                Color.FromArgb(234, 9, 15, 23),
+                Color.FromArgb(128, 102, 182, 178),
+                Color.FromArgb(52, 255, 255, 255),
+                shadowAlpha: 52,
+                drawSheen: false,
+                drawHighlightLine: false);
+
+            int statY = actionStripRect.Bottom + 14;
             int cardW = 106;
             int gap = 10;
             int cardX = deckRect.Left + 18;
@@ -236,7 +253,9 @@ namespace TowerDefense
                 Color.FromArgb(232, 10, 15, 22),
                 Color.FromArgb(145, 126, 210, 205),
                 Color.FromArgb(48, 255, 255, 255),
-                shadowAlpha: 64);
+                shadowAlpha: 64,
+                drawSheen: false,
+                drawHighlightLine: false);
 
             using var waveFont = new Font("Bahnschrift SemiBold", 10f, FontStyle.Bold);
             TextRenderer.DrawText(g, $"ВОЛНА {hud.CurrentWave}", waveFont, new Rectangle(progressRect.Left + 14, progressRect.Top + 8, 120, 16),
@@ -274,7 +293,9 @@ namespace TowerDefense
                 Color.FromArgb(230, 10, 16, 24),
                 Color.FromArgb(150, accent),
                 Color.FromArgb(56, 255, 255, 255),
-                shadowAlpha: 58);
+                shadowAlpha: 58,
+                drawSheen: false,
+                drawHighlightLine: false);
 
             using var titleFont = new Font("Segoe UI", 8.2f, FontStyle.Regular);
             using var valueFont = new Font("Bahnschrift SemiBold", 11.5f, FontStyle.Bold);
@@ -375,18 +396,15 @@ namespace TowerDefense
 
             fieldRect = new Rectangle(left, top, fieldW, fieldH);
             hudRect = new Rectangle(0, deckTop, ClientSize.Width, deckHeight);
-            int minDeckWidth = 18 + btnBasic.Width + 10 + btnSniper.Width + 10 + btnRapid.Width + 18 + 10 + btnWave.Width + 18;
+            int minButtonDeckWidth = 18 + 118 * 3 + 10 * 2 + 18 + 220 + 18;
+            int minStatsDeckWidth = 18 + (106 * 5) + (10 * 4) + 24 + 228 + 22;
+            int minDeckWidth = Math.Max(minButtonDeckWidth, minStatsDeckWidth);
             int targetDeckWidth = Math.Max(fieldRect.Width + 40, minDeckWidth);
             int deckWidth = Math.Min(targetDeckWidth, Math.Max(280, ClientSize.Width - outerMargin * 2));
             int deckLeft = (ClientSize.Width - deckWidth) / 2;
             deckRect = new Rectangle(deckLeft, deckTop, deckWidth, deckHeight);
 
-            int buttonsY = deckRect.Top + 18;
-            btnBasic.Location = new Point(deckRect.Left + 18, buttonsY);
-            btnSniper.Location = new Point(btnBasic.Right + 10, buttonsY);
-            btnRapid.Location = new Point(btnSniper.Right + 10, buttonsY);
-            btnWave.Location = new Point(deckRect.Right - btnWave.Width - 18, buttonsY);
-            HighlightSelectedTowerButton();
+            LayoutHudButtons();
         }
 
         private AccentButton CreateHudButton(string text, int width, Color color)
@@ -395,7 +413,7 @@ namespace TowerDefense
             {
                 Text = text,
                 Width = width,
-                Height = 40,
+                Height = 44,
                 BaseColor = color,
                 GlowColor = color,
                 SquareStyle = true
@@ -433,6 +451,29 @@ namespace TowerDefense
                 SurroundColors = new[] { Color.FromArgb(0, color) }
             };
             g.FillPath(brush, path);
+        }
+
+        private Rectangle GetActionStripRect()
+        {
+            return new Rectangle(deckRect.Left + 18, deckRect.Top + 28, deckRect.Width - 36, 52);
+        }
+
+        private void LayoutHudButtons()
+        {
+            Rectangle actionStripRect = GetActionStripRect();
+            const int towerGap = 10;
+            const int groupGap = 18;
+            int waveWidth = Math.Clamp((int)Math.Round(actionStripRect.Width * 0.31f), 220, 280);
+            int towerAreaWidth = Math.Max(360, actionStripRect.Width - waveWidth - groupGap);
+            int towerButtonWidth = Math.Max(112, (towerAreaWidth - towerGap * 2) / 3);
+            int lastTowerWidth = towerAreaWidth - towerButtonWidth * 3 - towerGap * 2;
+            int buttonTop = actionStripRect.Top + 4;
+
+            btnBasic.SetBounds(actionStripRect.Left, buttonTop, towerButtonWidth, 44);
+            btnSniper.SetBounds(btnBasic.Right + towerGap, buttonTop, towerButtonWidth, 44);
+            btnRapid.SetBounds(btnSniper.Right + towerGap, buttonTop, towerButtonWidth + lastTowerWidth, 44);
+            btnWave.SetBounds(actionStripRect.Right - waveWidth, buttonTop, waveWidth, 44);
+            HighlightSelectedTowerButton();
         }
     }
 }

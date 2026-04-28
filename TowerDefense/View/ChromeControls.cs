@@ -86,13 +86,8 @@ namespace TowerDefense.View
                 return;
             }
 
-            if (SquareStyle)
-            {
-                Region = null;
-                return;
-            }
-
-            using var path = VisualTheme.CreateRoundedRect(new RectangleF(0, 0, Width - 1, Height - 1), 14f);
+            float radius = SquareStyle ? 11f : 14f;
+            using var path = VisualTheme.CreateRoundedRect(new RectangleF(0, 0, Width - 1, Height - 1), radius);
             Region = new Region(path);
         }
 
@@ -131,63 +126,70 @@ namespace TowerDefense.View
 
         protected override void OnPaint(PaintEventArgs e)
         {
-            e.Graphics.SmoothingMode = SquareStyle ? SmoothingMode.None : SmoothingMode.AntiAlias;
-
-            if (SquareStyle)
-            {
-                Rectangle squareRect = new(0, 0, System.Math.Max(1, Width - 1), System.Math.Max(1, Height - 1));
-                Color fillColor = VisualTheme.Blend(baseColor, Color.White, pressed ? 0.05f : hovered ? 0.1f : 0.08f);
-                using var fill = new SolidBrush(fillColor);
-                e.Graphics.FillRectangle(fill, squareRect);
-
-                Color borderColor = Selected ? GlowColor : VisualTheme.Blend(baseColor, Color.Black, 0.34f);
-                using var border = new Pen(borderColor, Selected ? 2f : 1f);
-                e.Graphics.DrawRectangle(border, squareRect);
-
-                Rectangle squareTextRect = new(squareRect.Left + 1, squareRect.Top + 1, System.Math.Max(1, squareRect.Width - 2), System.Math.Max(1, squareRect.Height - 2));
-                TextRenderer.DrawText(
-                    e.Graphics,
-                    Text,
-                    Font,
-                    squareTextRect,
-                    ForeColor,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
-                return;
-            }
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
             Rectangle rect = new(1, 1, System.Math.Max(1, Width - 3), System.Math.Max(1, Height - 3));
             Rectangle shadowRect = rect;
             shadowRect.Offset(0, 3);
+            float radius = SquareStyle ? 11f : 14f;
 
-            using (var shadowPath = VisualTheme.CreateRoundedRect(shadowRect, 14f))
+            using (var shadowPath = VisualTheme.CreateRoundedRect(shadowRect, radius))
             using (var shadowBrush = new SolidBrush(Color.FromArgb(70, 0, 0, 0)))
             {
                 e.Graphics.FillPath(shadowBrush, shadowPath);
             }
 
-            Color glow = Selected
+            Color glowBase = Selected
                 ? GlowColor
                 : hovered
                     ? VisualTheme.Blend(GlowColor, Color.White, 0.2f)
                     : VisualTheme.WithAlpha(GlowColor, 180);
 
-            Color top = VisualTheme.Blend(baseColor, Color.White, pressed ? 0.08f : hovered ? 0.18f : 0.12f);
-            Color bottom = VisualTheme.Blend(baseColor, Color.Black, pressed ? 0.34f : 0.2f);
+            Color top = Enabled
+                ? VisualTheme.Blend(baseColor, Color.White, pressed ? 0.08f : hovered ? 0.18f : 0.12f)
+                : VisualTheme.Blend(baseColor, Color.Gray, 0.45f);
+            Color bottom = Enabled
+                ? VisualTheme.Blend(baseColor, Color.Black, pressed ? 0.34f : 0.2f)
+                : VisualTheme.Blend(baseColor, Color.Black, 0.5f);
 
-            using var path = VisualTheme.CreateRoundedRect(rect, 14f);
+            using var path = VisualTheme.CreateRoundedRect(rect, radius);
             using (var fill = new LinearGradientBrush(rect, top, bottom, 90f))
             {
                 e.Graphics.FillPath(fill, path);
             }
 
-            using (var glossPen = new Pen(Color.FromArgb(hovered ? 110 : 72, 255, 255, 255), 1.3f))
+            if (!SquareStyle)
             {
+                Rectangle accentRect = new(rect.Left + 4, rect.Top + 4, System.Math.Max(10, rect.Width - 8), 6);
+                using var accentPath = VisualTheme.CreateRoundedRect(accentRect, 4f);
+                using var accentBrush = new LinearGradientBrush(
+                    accentRect,
+                    VisualTheme.WithAlpha(VisualTheme.Blend(baseColor, Color.White, 0.28f), Enabled ? 220 : 120),
+                    VisualTheme.WithAlpha(baseColor, 0),
+                    90f);
+                e.Graphics.FillPath(accentBrush, accentPath);
+            }
+
+            if (!SquareStyle)
+            {
+                using var glossPen = new Pen(Color.FromArgb(hovered ? 110 : 72, 255, 255, 255), 1.3f);
                 e.Graphics.DrawLine(glossPen, rect.Left + 14, rect.Top + 10, rect.Right - 14, rect.Top + 10);
             }
 
-            using (var borderPen = new Pen(Selected ? glow : VisualTheme.WithAlpha(glow, hovered ? 210 : 150), Selected ? 2f : 1.25f))
+            Color borderColor = Enabled
+                ? (Selected ? glowBase : VisualTheme.WithAlpha(glowBase, hovered ? 210 : 150))
+                : Color.FromArgb(110, 102, 118, 128);
+
+            using (var borderPen = new Pen(borderColor, Selected ? 2f : 1.25f))
             {
                 e.Graphics.DrawPath(borderPen, path);
+            }
+
+            if (Selected)
+            {
+                Rectangle glowRect = new(rect.Left + 7, rect.Bottom - 7, System.Math.Max(12, rect.Width - 14), 3);
+                using var glowBrush = new SolidBrush(Color.FromArgb(150, GlowColor));
+                e.Graphics.FillRectangle(glowBrush, glowRect);
             }
 
             Rectangle textRect = new(rect.Left, rect.Top - 1, rect.Width, rect.Height);
@@ -196,7 +198,7 @@ namespace TowerDefense.View
                 Text,
                 Font,
                 textRect,
-                ForeColor,
+                Enabled ? ForeColor : VisualTheme.WithAlpha(VisualTheme.TextSecondary, 160),
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
         }
     }

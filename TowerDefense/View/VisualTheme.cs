@@ -50,7 +50,9 @@ namespace TowerDefense.View
             Color bottom,
             Color border,
             Color highlight,
-            int shadowAlpha = 86)
+            int shadowAlpha = 86,
+            bool drawSheen = true,
+            bool drawHighlightLine = true)
         {
             var shadowRect = rect;
             shadowRect.Offset(0, 6);
@@ -64,14 +66,15 @@ namespace TowerDefense.View
             using var fill = new LinearGradientBrush(rect, top, bottom, 90f);
             g.FillPath(fill, panelPath);
 
-            Rectangle sheenRect = new(rect.X + 1, rect.Y + 1, rect.Width - 2, Math.Max(18, rect.Height / 3));
-            using (var sheenPath = CreateRoundedRect(sheenRect, Math.Max(8f, radius - 8f)))
-            using (var sheenBrush = new LinearGradientBrush(
-                sheenRect,
-                Color.FromArgb(44, 255, 255, 255),
-                Color.FromArgb(0, 255, 255, 255),
-                90f))
+            if (drawSheen)
             {
+                Rectangle sheenRect = new(rect.X + 1, rect.Y + 1, rect.Width - 2, Math.Max(18, rect.Height / 3));
+                using var sheenPath = CreateRoundedRect(sheenRect, Math.Max(8f, radius - 8f));
+                using var sheenBrush = new LinearGradientBrush(
+                    sheenRect,
+                    Color.FromArgb(44, 255, 255, 255),
+                    Color.FromArgb(0, 255, 255, 255),
+                    90f);
                 g.FillPath(sheenBrush, sheenPath);
             }
 
@@ -80,12 +83,15 @@ namespace TowerDefense.View
                 g.DrawPath(borderPen, panelPath);
             }
 
-            using var clip = CreateRoundedRect(rect, radius);
-            var state = g.Save();
-            g.SetClip(clip);
-            using var highlightPen = new Pen(highlight, 1.6f);
-            g.DrawLine(highlightPen, rect.Left + 18, rect.Top + 16, rect.Right - 18, rect.Top + 16);
-            g.Restore(state);
+            if (drawHighlightLine)
+            {
+                using var clip = CreateRoundedRect(rect, radius);
+                var state = g.Save();
+                g.SetClip(clip);
+                using var highlightPen = new Pen(highlight, 1.6f);
+                g.DrawLine(highlightPen, rect.Left + 18, rect.Top + 16, rect.Right - 18, rect.Top + 16);
+                g.Restore(state);
+            }
         }
 
         public static Color WithAlpha(Color color, int alpha)
