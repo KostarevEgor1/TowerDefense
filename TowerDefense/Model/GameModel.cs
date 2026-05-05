@@ -186,7 +186,27 @@ namespace TowerDefense.Model
             {
                 Resources.EarnGold(ComputeWaveClearReward());
                 Waves.CompleteWave();
-                Field.ShiftPathForWave(Waves.CurrentWave + 1);
+                bool pathShifted = Field.ShiftPathForWave(Waves.CurrentWave + 1);
+                if (pathShifted)
+                {
+                    AutoSellTowersNowOnPath();
+                }
+            }
+        }
+
+        private void AutoSellTowersNowOnPath()
+        {
+            for (int i = Towers.Count - 1; i >= 0; i--)
+            {
+                var tower = Towers[i];
+                if (!Field.IsOnAnyPath(tower.Col, tower.Row))
+                {
+                    continue;
+                }
+
+                int autoSellValue = (int)MathF.Round(tower.TotalInvested * 0.5f);
+                Resources.EarnGold(autoSellValue);
+                Towers.RemoveAt(i);
             }
         }
 

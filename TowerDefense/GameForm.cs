@@ -15,6 +15,7 @@ namespace TowerDefense
         private readonly Timer timer = new();
         private readonly bool tutorialMode;
         private readonly AccentButton btnWave;
+        private readonly AccentButton btnMainMenu;
         private readonly AccentButton btnBasic;
         private readonly AccentButton btnSniper;
         private readonly AccentButton btnRapid;
@@ -29,6 +30,7 @@ namespace TowerDefense
         private int tutorialStep;
         private bool tutorialCompleted;
         private Point mouseCell = new(-1, -1);
+        public bool ReturnToMenuRequested { get; private set; }
 
         public GameForm(DifficultyLevel difficultyLevel = DifficultyLevel.Normal, bool showTutorial = false)
         {
@@ -43,6 +45,7 @@ namespace TowerDefense
             MinimumSize = new Size(1300, 940);
 
             btnWave = CreateHudButton("Начать волну", 232, VisualTheme.AccentBlue);
+            btnMainMenu = CreateHudButton("Главное меню", 172, VisualTheme.AccentCoral);
             btnBasic = CreateHudButton("Базовая 50", 132, VisualTheme.AccentMint);
             btnSniper = CreateHudButton("Снайпер 100", 132, VisualTheme.AccentBlue);
             btnRapid = CreateHudButton("Скоростр. 75", 140, VisualTheme.AccentAmber);
@@ -60,8 +63,14 @@ namespace TowerDefense
             btnBasic.Click += (_, _) => SelectTower(TowerType.Basic);
             btnSniper.Click += (_, _) => SelectTower(TowerType.Sniper);
             btnRapid.Click += (_, _) => SelectTower(TowerType.Rapid);
+            btnMainMenu.Click += (_, _) =>
+            {
+                ReturnToMenuRequested = true;
+                timer.Stop();
+                Close();
+            };
 
-            Controls.AddRange(new Control[] { btnWave, btnBasic, btnSniper, btnRapid });
+            Controls.AddRange(new Control[] { btnWave, btnMainMenu, btnBasic, btnSniper, btnRapid });
 
             timer.Interval = 16;
             timer.Tick += (_, _) =>
@@ -471,8 +480,9 @@ namespace TowerDefense
             Rectangle actionStripRect = GetActionStripRect();
             const int towerGap = 10;
             const int groupGap = 18;
-            int waveWidth = Math.Clamp((int)Math.Round(actionStripRect.Width * 0.31f), 220, 280);
-            int towerAreaWidth = Math.Max(360, actionStripRect.Width - waveWidth - groupGap);
+            int waveWidth = Math.Clamp((int)Math.Round(actionStripRect.Width * 0.23f), 180, 240);
+            int menuWidth = Math.Clamp((int)Math.Round(actionStripRect.Width * 0.19f), 160, 220);
+            int towerAreaWidth = Math.Max(360, actionStripRect.Width - waveWidth - menuWidth - groupGap * 2);
             int towerButtonWidth = Math.Max(112, (towerAreaWidth - towerGap * 2) / 3);
             int lastTowerWidth = towerAreaWidth - towerButtonWidth * 3 - towerGap * 2;
             int buttonTop = actionStripRect.Top + 4;
@@ -480,7 +490,10 @@ namespace TowerDefense
             btnBasic.SetBounds(actionStripRect.Left, buttonTop, towerButtonWidth, 44);
             btnSniper.SetBounds(btnBasic.Right + towerGap, buttonTop, towerButtonWidth, 44);
             btnRapid.SetBounds(btnSniper.Right + towerGap, buttonTop, towerButtonWidth + lastTowerWidth, 44);
-            btnWave.SetBounds(actionStripRect.Right - waveWidth, buttonTop, waveWidth, 44);
+            int menuLeft = actionStripRect.Right - menuWidth;
+            int waveLeft = menuLeft - groupGap - waveWidth;
+            btnWave.SetBounds(waveLeft, buttonTop, waveWidth, 44);
+            btnMainMenu.SetBounds(menuLeft, buttonTop, menuWidth, 44);
             HighlightSelectedTowerButton();
         }
     }

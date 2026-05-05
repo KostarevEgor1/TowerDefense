@@ -55,9 +55,12 @@ namespace TowerDefense.Model
             ActivePaths = new List<List<Point>>(BasePaths);
         }
 
-        public void ShiftPathForWave(int wave)
+        public bool ShiftPathForWave(int wave)
         {
-            if (wave % 3 != 0) return;
+            if (wave % 3 != 0)
+            {
+                return false;
+            }
 
             // Сдвигаем только первый путь между y=3, y=4, y=5
             int targetY = wave % 6 == 0 ? 3 : 5;
@@ -77,6 +80,7 @@ namespace TowerDefense.Model
             }
 
             ActivePaths = new List<List<Point>> { shifted, BasePaths[1] };
+            return true;
         }
 
         public bool IsOnAnyPath(int col, int row)

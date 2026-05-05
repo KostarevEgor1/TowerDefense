@@ -123,7 +123,16 @@ namespace TowerDefense
             {
                 Hide();
                 var game = new GameForm(ReadDifficulty(), showTutorial: false);
-                game.FormClosed += (_, _) => Close();
+                game.FormClosed += (_, _) =>
+                {
+                    if (game.ReturnToMenuRequested)
+                    {
+                        Show();
+                        return;
+                    }
+
+                    Close();
+                };
                 game.Show();
             };
 
