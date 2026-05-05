@@ -198,6 +198,7 @@ namespace TowerDefense.View
                     break;
                 }
             }
+            using var badgeFont = new Font("Bahnschrift SemiBold", 7.5f, FontStyle.Bold);
 
             foreach (var tower in scene.Towers)
             {
@@ -224,6 +225,23 @@ namespace TowerDefense.View
                 var sprite = SpriteManager.GetTowerSprite(tower.Type);
                 var targetRect = new Rectangle(tx + 2, ty + 1, field.CellSize - 4, field.CellSize - 2);
                 g.DrawImage(sprite, targetRect);
+
+                if (tower.Level > 1)
+                {
+                    Rectangle badgeRect = new(tx + field.CellSize - 18, ty + 3, 14, 14);
+                    VisualTheme.DrawRoundedPanel(
+                        g,
+                        badgeRect,
+                        7f,
+                        Color.FromArgb(235, 18, 28, 40),
+                        Color.FromArgb(240, 8, 13, 20),
+                        Color.FromArgb(180, accent),
+                        Color.FromArgb(60, 255, 255, 255),
+                        shadowAlpha: 34);
+
+                    TextRenderer.DrawText(g, tower.Level.ToString(), badgeFont, badgeRect, VisualTheme.TextPrimary,
+                        TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                }
             }
         }
 
@@ -279,13 +297,12 @@ namespace TowerDefense.View
             {
                 float lifeRatio = effect.MaxLifetime <= 0 ? 0f : (float)effect.Lifetime / effect.MaxLifetime;
                 float progress = 1f - lifeRatio;
-                float baseRadius = effect.Type == ImpactEffectType.Death ? 10f : 5f;
-                float radiusGrowth = effect.Type == ImpactEffectType.Death ? 28f : 18f;
+                bool burst = effect.MaxLifetime >= 14;
+                float baseRadius = burst ? 10f : 5f;
+                float radiusGrowth = burst ? 28f : 18f;
                 float radius = baseRadius + progress * radiusGrowth;
-                int alpha = (int)((effect.Type == ImpactEffectType.Death ? 180 : 150) * lifeRatio);
-                Color tone = effect.Type == ImpactEffectType.Death
-                    ? VisualTheme.AccentCoral
-                    : VisualTheme.AccentAmber;
+                int alpha = (int)((burst ? 180 : 150) * lifeRatio);
+                Color tone = burst ? VisualTheme.AccentCoral : VisualTheme.AccentAmber;
 
                 DrawAmbientGlow(g, new RectangleF(effect.X - radius, effect.Y - radius, radius * 2, radius * 2), tone, alpha / 3);
                 using var ring = new Pen(Color.FromArgb(alpha, tone), 2f);

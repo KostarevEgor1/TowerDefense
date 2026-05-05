@@ -10,7 +10,7 @@ namespace TowerDefense
 {
     public class GameForm : Form
     {
-        private readonly GameController controller = new();
+        private readonly GameController controller;
         private readonly GameRenderer renderer;
         private readonly Timer timer = new();
         private readonly bool tutorialMode;
@@ -30,16 +30,17 @@ namespace TowerDefense
         private bool tutorialCompleted;
         private Point mouseCell = new(-1, -1);
 
-        public GameForm(bool showTutorial = false)
+        public GameForm(DifficultyLevel difficultyLevel = DifficultyLevel.Normal, bool showTutorial = false)
         {
             tutorialMode = showTutorial;
+            controller = new GameController(difficultyLevel);
             renderer = new GameRenderer(controller.Scene);
 
             Text = tutorialMode ? "Tower Defense - Tutorial" : "Tower Defense";
             DoubleBuffered = true;
             StartPosition = FormStartPosition.CenterScreen;
             WindowState = FormWindowState.Maximized;
-            MinimumSize = new Size(1240, 930);
+            MinimumSize = new Size(1300, 940);
 
             btnWave = CreateHudButton("Начать волну", 232, VisualTheme.AccentBlue);
             btnBasic = CreateHudButton("Базовая 50", 132, VisualTheme.AccentMint);
@@ -56,7 +57,6 @@ namespace TowerDefense
                     tutorialStep = 3;
                 }
             };
-
             btnBasic.Click += (_, _) => SelectTower(TowerType.Basic);
             btnSniper.Click += (_, _) => SelectTower(TowerType.Sniper);
             btnRapid.Click += (_, _) => SelectTower(TowerType.Rapid);
@@ -68,16 +68,15 @@ namespace TowerDefense
             {
                 controller.Tick();
                 UpdateWaveButton();
+                Invalidate();
 
-                if (tutorialMode && !tutorialCompleted && controller.CurrentWave >= 4)
+                if (tutorialMode && !tutorialCompleted && controller.CurrentWave >= 4 && !controller.IsWaveInProgress)
                 {
                     tutorialCompleted = true;
                     timer.Stop();
                     Close();
                     return;
                 }
-
-                Invalidate();
 
                 if (controller.IsGameOver && !gameOverShown)
                 {
@@ -95,8 +94,17 @@ namespace TowerDefense
                     return;
                 }
 
-                bool placed = controller.TryPlaceTower(col, row, selectedType);
-                if (tutorialMode && tutorialStep == 1 && placed)
+                PlayerActionResult result;
+                if (e.Button == MouseButtons.Right)
+                {
+                    result = controller.HandleSecondaryAction(col, row);
+                }
+                else
+                {
+                    result = controller.HandlePrimaryAction(col, row, selectedType);
+                }
+
+                if (tutorialMode && tutorialStep == 1 && result == PlayerActionResult.TowerPlaced)
                 {
                     tutorialStep = 2;
                 }
@@ -189,14 +197,14 @@ namespace TowerDefense
 
         private void UpdateWaveButton()
         {
-            GameHudState hud = controller.GetHudState(selectedType);
+            GameHudState hud = controller.GetHudState(selectedType, mouseCell);
             btnWave.Enabled = hud.CanStartWave;
             btnWave.Text = hud.WaveButtonText;
         }
 
         private void DrawHud(Graphics g)
         {
-            GameHudState hud = controller.GetHudState(selectedType);
+            GameHudState hud = controller.GetHudState(selectedType, mouseCell);
             Rectangle actionStripRect = GetActionStripRect();
 
             VisualTheme.DrawRoundedPanel(
@@ -242,7 +250,7 @@ namespace TowerDefense
             DrawStatCard(g, cardX + (cardW + gap) * 1, statY, cardW, 52, "База 1", hud.Base1Hp + " ОЗ", VisualTheme.AccentBlue);
             DrawStatCard(g, cardX + (cardW + gap) * 2, statY, cardW, 52, "База 2", hud.Base2Hp + " ОЗ", VisualTheme.AccentMint);
             DrawStatCard(g, cardX + (cardW + gap) * 3, statY, cardW, 52, "Счёт", hud.Score.ToString(), VisualTheme.AccentCoral);
-            DrawStatCard(g, cardX + (cardW + gap) * 4, statY, cardW, 52, "Башня", hud.SelectedTowerName, VisualTheme.TowerAccent(selectedType));
+            DrawStatCard(g, cardX + (cardW + gap) * 4, statY, cardW, 52, "Сложность", hud.DifficultyName, VisualTheme.AccentBlue);
 
             Rectangle progressRect = new(deckRect.Right - 250, statY, 228, 52);
             VisualTheme.DrawRoundedPanel(
@@ -258,9 +266,9 @@ namespace TowerDefense
                 drawHighlightLine: false);
 
             using var waveFont = new Font("Bahnschrift SemiBold", 10f, FontStyle.Bold);
-            TextRenderer.DrawText(g, $"ВОЛНА {hud.CurrentWave}", waveFont, new Rectangle(progressRect.Left + 14, progressRect.Top + 8, 120, 16),
-                VisualTheme.TextPrimary, TextFormatFlags.VerticalCenter);
-            TextRenderer.DrawText(g, $"{hud.WaveProgress}/{hud.WaveTotal}", waveFont, new Rectangle(progressRect.Right - 64, progressRect.Top + 8, 48, 16),
+            TextRenderer.DrawText(g, $"ВОЛНА {hud.CurrentWave} | {hud.WavePatternName}", waveFont,
+                new Rectangle(progressRect.Left + 14, progressRect.Top + 8, 170, 16), VisualTheme.TextPrimary, TextFormatFlags.VerticalCenter);
+            TextRenderer.DrawText(g, $"{hud.DefeatedInWave}/{hud.WaveTotal}", waveFont, new Rectangle(progressRect.Right - 64, progressRect.Top + 8, 48, 16),
                 VisualTheme.TextSecondary, TextFormatFlags.Right | TextFormatFlags.VerticalCenter);
 
             Rectangle barRect = new(progressRect.Left + 14, progressRect.Top + 27, progressRect.Width - 28, 12);
@@ -315,11 +323,11 @@ namespace TowerDefense
             string message = tutorialStep switch
             {
                 0 => "Шаг 1: выберите тип башни",
-                1 => "Шаг 2: поставьте башню на отмеченную клетку",
+                1 => "Шаг 2: поставьте башню на клетку",
                 2 => "Шаг 3: начните первую волну",
                 _ => controller.CurrentWave < 3
-                    ? $"Шаг 4: переживите учебные волны ({controller.CurrentWave}/3)"
-                    : "Последняя учебная волна. Удержите обе линии."
+                    ? $"Шаг 4: пройдите учебные волны ({controller.CurrentWave}/3)"
+                    : "Последняя учебная волна. Удержите обе базы."
             };
 
             using var font = new Font("Bahnschrift SemiBold", 12.5f, FontStyle.Bold);

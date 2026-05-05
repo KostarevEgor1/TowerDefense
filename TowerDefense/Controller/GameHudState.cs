@@ -4,14 +4,15 @@ namespace TowerDefense.Controller
         bool IsGameOver,
         bool CanStartWave,
         int CurrentWave,
-        int WaveProgress,
+        int DefeatedInWave,
         int WaveTotal,
         float WaveRatio,
         int Gold,
         int Base1Hp,
         int Base2Hp,
         int Score,
-        string SelectedTowerName,
+        string DifficultyName,
+        string WavePatternName,
         string WaveButtonText,
         string HintText);
 }

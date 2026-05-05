@@ -1,18 +1,29 @@
+using System;
 using System.Collections.Generic;
 
 namespace TowerDefense.Model
 {
     public class GameModel
     {
+        private readonly DifficultySettings difficulty;
+
         public GameField Field { get; } = new GameField();
-        public List<Enemy> Enemies { get; } = new List<Enemy>();
-        public List<Tower> Towers { get; } = new List<Tower>();
-        public List<Projectile> Projectiles { get; } = new List<Projectile>();
-        public List<ImpactEffect> ImpactEffects { get; } = new List<ImpactEffect>();
-        public WaveManager Waves { get; } = new WaveManager();
+        public List<Enemy> Enemies { get; } = new();
+        public List<Tower> Towers { get; } = new();
+        public List<Projectile> Projectiles { get; } = new();
+        public List<ImpactEffect> ImpactEffects { get; } = new();
+        public WaveManager Waves { get; }
         public ResourceManager Resources { get; } = new ResourceManager();
         public int Score { get; private set; }
+        public DifficultyLevel DifficultyLevel => difficulty.Level;
+        public string DifficultyName => difficulty.DisplayName;
         public bool IsGameOver => Resources.IsGameOver();
+
+        public GameModel(DifficultyLevel difficultyLevel = DifficultyLevel.Normal)
+        {
+            difficulty = DifficultyCatalog.For(difficultyLevel);
+            Waves = new WaveManager(difficulty);
+        }
 
         public bool CanPlaceTower(int col, int row, TowerType type = TowerType.Basic)
         {
@@ -24,37 +35,101 @@ namespace TowerDefense.Model
 
         public void PlaceTower(int col, int row, TowerType type = TowerType.Basic)
         {
-            if (!CanPlaceTower(col, row, type)) return;
-            var t = new Tower(col, row, type);
-            Towers.Add(t);
-            Resources.EarnGold(-t.Cost);
+            if (!CanPlaceTower(col, row, type))
+            {
+                return;
+            }
+
+            var tower = new Tower(col, row, type);
+            Towers.Add(tower);
+            Resources.EarnGold(-tower.Cost);
         }
 
-        // Волна запускается вручную или автоматически по завершении предыдущей
+        public Tower? FindTower(int col, int row)
+        {
+            return Towers.Find(t => t.Col == col && t.Row == row);
+        }
+
+        public bool CanUpgradeTower(int col, int row)
+        {
+            var tower = FindTower(col, row);
+            return tower != null && tower.CanUpgrade && Resources.Gold >= tower.GetUpgradeCost();
+        }
+
+        public bool UpgradeTower(int col, int row)
+        {
+            var tower = FindTower(col, row);
+            if (tower == null || !tower.CanUpgrade)
+            {
+                return false;
+            }
+
+            int upgradeCost = tower.GetUpgradeCost();
+            if (Resources.Gold < upgradeCost)
+            {
+                return false;
+            }
+
+            if (!tower.TryUpgrade())
+            {
+                return false;
+            }
+
+            Resources.EarnGold(-upgradeCost);
+            return true;
+        }
+
+        public bool SellTower(int col, int row)
+        {
+            var tower = FindTower(col, row);
+            if (tower == null)
+            {
+                return false;
+            }
+
+            Resources.EarnGold(tower.GetSellValue());
+            Towers.Remove(tower);
+            return true;
+        }
+
         public void StartWave()
         {
+            if (IsGameOver || Waves.WaveInProgress)
+            {
+                return;
+            }
+
             Waves.StartNextWave();
         }
 
         public void Update()
         {
-            if (IsGameOver) return;
-
-            if (Waves.ShouldSpawn(out int hp, out int pathIndex))
+            if (IsGameOver)
             {
-                var path = Field.ActivePaths[pathIndex];
-                var type = pathIndex == 1
-                    ? (hp > 4 ? EnemyType.Tank : EnemyType.Normal)
-                    : EnemyType.Fast;
-                Enemies.Add(new Enemy(path, Field.CellSize, hp, type, pathIndex));
+                return;
+            }
+
+            if (Waves.ShouldSpawn(out WaveSpawn spawn))
+            {
+                float waveHpMultiplier = 1f + Math.Max(0, Waves.CurrentWave - 1) * difficulty.EnemyHpWaveGrowth;
+                int hp = Math.Max(1, (int)MathF.Round(spawn.BaseHealth * difficulty.EnemyHpMultiplier * waveHpMultiplier));
+                int reward = ComputeEnemyReward(spawn.Type);
+                var path = Field.ActivePaths[spawn.PathIndex];
+                Enemies.Add(new Enemy(
+                    path,
+                    Field.CellSize,
+                    hp,
+                    spawn.Type,
+                    spawn.PathIndex,
+                    speedMultiplier: difficulty.EnemySpeedMultiplier,
+                    goldReward: reward));
             }
 
             foreach (var tower in Towers)
             {
-                if (tower.TryShoot(Enemies, Field.CellSize, out _, out var projectile))
+                if (tower.TryShoot(Enemies, Field.CellSize, out _, out var projectile) && projectile != null)
                 {
-                    if (projectile != null)
-                        Projectiles.Add(projectile);
+                    Projectiles.Add(projectile);
                 }
             }
 
@@ -63,7 +138,7 @@ namespace TowerDefense.Model
                 Projectiles[i].Update();
                 if (Projectiles[i].HasHit)
                 {
-                    ImpactEffects.Add(new ImpactEffect(Projectiles[i].X, Projectiles[i].Y, ImpactEffectType.Hit));
+                    ImpactEffects.Add(new ImpactEffect(Projectiles[i].X, Projectiles[i].Y, lifetime: 10));
                     Projectiles.RemoveAt(i);
                 }
                 else if (Projectiles[i].Target.IsDead)
@@ -76,36 +151,66 @@ namespace TowerDefense.Model
             {
                 ImpactEffects[i].Update();
                 if (ImpactEffects[i].IsExpired)
+                {
                     ImpactEffects.RemoveAt(i);
+                }
             }
 
             for (int i = Enemies.Count - 1; i >= 0; i--)
             {
-                Enemies[i].Update();
-                if (Enemies[i].IsDead) 
-                { 
-                    ImpactEffects.Add(new ImpactEffect(Enemies[i].X, Enemies[i].Y, ImpactEffectType.Death));
-                    Score += 10; 
-                    Resources.EarnGold(20); 
-                    Enemies.RemoveAt(i); 
+                var enemy = Enemies[i];
+                enemy.Update();
+                if (enemy.IsDead)
+                {
+                    ImpactEffects.Add(new ImpactEffect(enemy.X, enemy.Y, lifetime: 14));
+                    Score += 10 + Waves.CurrentWave;
+                    Resources.EarnGold(enemy.GoldReward);
+                    Enemies.RemoveAt(i);
                 }
-                else if (Enemies[i].ReachedEnd) 
-                { 
-                    // Уменьшаем HP соответствующей части базы
-                    if (Enemies[i].PathIndex == 0)
+                else if (enemy.ReachedEnd)
+                {
+                    if (enemy.PathIndex == 0)
+                    {
                         Resources.LoseBase1Hp(1);
+                    }
                     else
+                    {
                         Resources.LoseBase2Hp(1);
-                    Enemies.RemoveAt(i); 
+                    }
+
+                    Enemies.RemoveAt(i);
                 }
             }
 
             if (Waves.IsWaveComplete(Enemies))
             {
-                Resources.EarnGold(50);
+                Resources.EarnGold(ComputeWaveClearReward());
+                Waves.CompleteWave();
                 Field.ShiftPathForWave(Waves.CurrentWave + 1);
-                Waves.StartNextWave();
             }
+        }
+
+        private int ComputeEnemyReward(EnemyType type)
+        {
+            int baseReward = type switch
+            {
+                EnemyType.Fast => 11,
+                EnemyType.Tank => 17,
+                _ => 13
+            };
+            int wavePart = Math.Max(1, (Waves.CurrentWave + 1) / 2);
+            return Math.Max(4, (int)MathF.Round((baseReward + wavePart) * difficulty.RewardMultiplier));
+        }
+
+        private int ComputeWaveClearReward()
+        {
+            int baseReward = 36 + Waves.CurrentWave * 4;
+            if (Waves.IsSpikeWave)
+            {
+                baseReward += 18;
+            }
+
+            return Math.Max(12, (int)MathF.Round(baseReward * difficulty.RewardMultiplier));
         }
     }
 }

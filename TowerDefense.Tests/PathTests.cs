@@ -62,16 +62,14 @@ namespace TowerDefense.Tests
         }
 
         [Test]
-        public void FastEnemies_SpawnOnPath0()
+        public void SecondWave_UsesFastRushPattern()
         {
-            var model = new GameModel();
-            model.StartWave();
-            for (int i = 0; i < 200; i++) model.Update();
-            bool anyFast = false;
-            foreach (var e in model.Enemies)
-                if (e.Type == EnemyType.Fast)
-                    anyFast = true;
-            Assert.That(anyFast, Is.True);
+            var waves = new WaveManager();
+            waves.StartNextWave();
+            waves.CompleteWave();
+            waves.StartNextWave();
+
+            Assert.That(waves.CurrentPattern, Is.EqualTo(WavePattern.FastRush));
         }
 
         [Test]
